@@ -64,8 +64,10 @@ class ConversationHistory:
     def get_messages(self) -> list[dict]:
         budget = self._context_limit - self._context_reserve
         if self._estimate_tokens(self._messages) <= budget:
-            return list(self._messages)
-        return self._truncate(budget)
+            msgs = list(self._messages)
+        else:
+            msgs = self._truncate(budget)
+        return [{"role": m["role"], "content": m["content"]} for m in msgs]
 
     def _estimate_tokens(self, messages: list[dict]) -> int:
         return int(sum(len(m["content"]) / self._token_estimate_ratio for m in messages))

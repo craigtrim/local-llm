@@ -52,13 +52,14 @@ def test_messages_property_includes_metadata():
     assert "assistant_uuid" not in msgs[0]
 
 
-def test_get_messages_preserves_metadata():
+def test_get_messages_strips_metadata():
+    """get_messages() returns only role/content for Ollama compatibility."""
     h = _make_history(assistant_uuid="xyz", assistant_name="Helper")
     h.add("user", "q")
     h.add("assistant", "a")
     msgs = h.get_messages()
-    assistant_msg = [m for m in msgs if m["role"] == "assistant"][0]
-    assert assistant_msg["assistant_uuid"] == "xyz"
+    for m in msgs:
+        assert set(m.keys()) == {"role", "content"}
 
 
 def test_stats_unaffected_by_metadata():
