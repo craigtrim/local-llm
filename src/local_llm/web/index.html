@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>local-llm</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai-sublime.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Model selection overlay -->
+    <div id="model-overlay">
+      <div class="model-card">
+        <h2>Select a model</h2>
+        <div id="model-list"></div>
+        <p class="model-hint">Models are loaded from your local Ollama instance</p>
+      </div>
+    </div>
+
+    <!-- Chat view -->
+    <div id="chat-container" style="display: none">
+      <header id="chat-header">
+        <span id="header-title" title="Click to rename">local-llm</span>
+        <span id="header-model"></span>
+        <div id="context-bar" title="Context window usage">
+          <div class="context-segments"></div>
+          <span class="context-pct">0%</span>
+        </div>
+        <div id="header-actions">
+          <button id="clear-btn" title="Clear conversation">/clear</button>
+          <button id="model-btn" title="Switch model">/model</button>
+        </div>
+      </header>
+
+      <div id="messages"></div>
+
+      <div id="input-area">
+        <div id="command-popup"></div>
+        <div id="input-wrapper">
+          <textarea id="user-input"
+                    rows="1"
+                    placeholder="Message local-llm..."
+                    autofocus></textarea>
+          <button id="send-btn" title="Send message">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 14L14.5 8L2 2V6.5L10 8L2 9.5V14Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+        <div id="input-hint">Enter to send, Shift+Enter for newline</div>
+      </div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
