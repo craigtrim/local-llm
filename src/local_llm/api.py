@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import queue
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -522,9 +521,10 @@ async def websocket_chat(ws: WebSocket, session_id: str):
             messages = history.get_messages()
             log.info("Calling ollama.chat(model=%s, stream=True) with %d messages", model, len(messages))
 
-            q: queue.Queue[str | None] = queue.Queue()
+            token_q: asyncio.Queue[str | None] = asyncio.Queue()
             error_holder: list[Exception] = []
             stop_event = threading.Event()
+            loop = asyncio.get_running_loop()
 
             def stream_sync():
                 try:
@@ -537,53 +537,52 @@ async def websocket_chat(ws: WebSocket, session_id: str):
                             break
                         token = chunk.get("message", {}).get("content", "")
                         if token:
-                            q.put(token)
+                            loop.call_soon_threadsafe(token_q.put_nowait, token)
                             token_count += 1
                     log.info("Streaming complete, %d tokens produced", token_count)
                 except Exception as e:
                     log.error("Error in stream_sync: %s", e)
                     error_holder.append(e)
                 finally:
-                    q.put(None)
-
-            loop = asyncio.get_event_loop()
-            task = loop.run_in_executor(None, stream_sync)
+                    loop.call_soon_threadsafe(token_q.put_nowait, None)
 
             full_response: list[str] = []
             stopped = False
-            while True:
-                # Check for stop message from client (non-blocking)
-                try:
-                    incoming = await asyncio.wait_for(
-                        ws.receive_text(), timeout=0.01
-                    )
-                    if incoming == "__STOP__":
-                        log.info("Client sent stop signal")
-                        stop_event.set()
-                        stopped = True
-                        # Drain remaining tokens until sentinel
-                        while True:
-                            try:
-                                token = q.get(timeout=0.5)
-                            except queue.Empty:
-                                continue
-                            if token is None:
-                                break
+
+            async def relay_tokens():
+                while True:
+                    token = await token_q.get()
+                    if token is None:
                         break
-                except asyncio.TimeoutError:
+                    full_response.append(token)
+                    await ws.send_json({"type": "token", "content": token})
+
+            async def listen_for_stop():
+                nonlocal stopped
+                try:
+                    while True:
+                        msg = await ws.receive_text()
+                        if msg == "__STOP__":
+                            log.info("Client sent stop signal")
+                            stop_event.set()
+                            stopped = True
+                            # Push sentinel so relay_tokens exits
+                            await token_q.put(None)
+                            return
+                except Exception:
                     pass
 
-                try:
-                    token = q.get_nowait()
-                except queue.Empty:
-                    await asyncio.sleep(0.01)
-                    continue
-                if token is None:
-                    break
-                full_response.append(token)
-                await ws.send_json({"type": "token", "content": token})
+            executor_task = loop.run_in_executor(None, stream_sync)
+            relay_task = asyncio.create_task(relay_tokens())
+            stop_task = asyncio.create_task(listen_for_stop())
 
-            await task
+            await relay_task
+            stop_task.cancel()
+            try:
+                await stop_task
+            except asyncio.CancelledError:
+                pass
+            await executor_task
 
             if error_holder and not stopped:
                 error_msg = str(error_holder[0])
