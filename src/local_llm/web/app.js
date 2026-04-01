@@ -18,6 +18,13 @@ const commandPopup = document.getElementById("command-popup");
 const contextBar = document.getElementById("context-bar");
 const headerTitle = document.getElementById("header-title");
 
+const sidebar = document.getElementById("sidebar");
+const sidebarRecentsList = document.getElementById("sidebar-recents-list");
+const sidebarModelName = document.getElementById("sidebar-model-name");
+const sidebarContextPct = document.getElementById("sidebar-context-pct");
+const sidebarContextFill = document.getElementById("sidebar-context-fill");
+const sidebarContextTokens = document.getElementById("sidebar-context-tokens");
+
 // --- Command registry ---
 
 const COMMANDS = [
@@ -31,7 +38,9 @@ const COMMANDS = [
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[init] DOMContentLoaded fired, starting init");
   initContextBarSegments();
+  initSidebar();
   init();
+  loadArchives();
 });
 
 async function init() {
@@ -79,11 +88,13 @@ async function selectModel(model) {
     sessionId = data.session_id;
     currentModel = model;
     headerModel.textContent = model;
+    sidebarModelName.textContent = "model: " + model;
     modelOverlay.style.display = "none";
     chatContainer.style.display = "flex";
     messagesEl.innerHTML = "";
     connectWebSocket();
     updateContextBar();
+    loadArchives();
     userInput.focus();
   } catch (err) {
     console.error("[selectModel] Failed to create session:", err);
@@ -286,6 +297,7 @@ async function handleClear() {
     document.title = "local-llm";
     connectWebSocket();
     updateContextBar();
+    loadArchives();
     appendSystemMessage("Conversation cleared.");
   } catch (err) {
     console.error("[clear] Failed:", err);
@@ -364,6 +376,13 @@ async function updateContextBar() {
       seg.className = "context-segment" + (i < filled ? ` filled ${color}` : "");
     });
     document.querySelector(".context-pct").textContent = `${Math.round(pct)}%`;
+
+    // Update sidebar context
+    sidebarContextPct.textContent = `${Math.round(pct)}%`;
+    sidebarContextFill.style.width = `${pct}%`;
+    sidebarContextFill.className = "sidebar-context-fill " + color;
+    sidebarContextTokens.textContent = `${data.tokens_used.toLocaleString()} / ${data.token_budget.toLocaleString()} tokens`;
+
     if (data.max_input_chars != null) {
       maxInputChars = data.max_input_chars;
       updateInputLimit();
@@ -606,6 +625,7 @@ document.getElementById("context-clear-btn").addEventListener("click", async () 
     document.title = "local-llm";
     connectWebSocket();
     updateContextBar();
+    loadArchives();
   } catch (err) {
     console.error("[context-clear] Failed:", err);
   }
@@ -615,3 +635,88 @@ document.getElementById("context-clear-btn").addEventListener("click", async () 
   modal.classList.remove("clearing");
   closeContextModal();
 });
+
+// --- Sidebar ---
+
+function initSidebar() {
+  const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
+  if (collapsed) {
+    sidebar.classList.add("collapsed");
+  }
+}
+
+function toggleSidebar() {
+  sidebar.classList.toggle("collapsed");
+  localStorage.setItem("sidebar-collapsed", sidebar.classList.contains("collapsed"));
+}
+
+async function loadArchives() {
+  console.log("[sidebar] Loading archives");
+  try {
+    const res = await fetch("/api/archives");
+    const data = await res.json();
+    const archives = data.archives || [];
+    console.log("[sidebar] Archives loaded:", archives.length);
+
+    if (archives.length === 0) {
+      sidebarRecentsList.innerHTML = '<div class="sidebar-recents-empty">No conversations yet</div>';
+      return;
+    }
+
+    sidebarRecentsList.innerHTML = "";
+    archives.forEach((arc) => {
+      const btn = document.createElement("button");
+      btn.className = "sidebar-recent-item";
+      btn.textContent = arc.title;
+      btn.title = arc.title;
+      btn.addEventListener("click", () => loadConversation(arc.filename, btn));
+      sidebarRecentsList.appendChild(btn);
+    });
+  } catch (err) {
+    console.error("[sidebar] Failed to load archives:", err);
+    sidebarRecentsList.innerHTML = '<div class="sidebar-recents-empty">Failed to load</div>';
+  }
+}
+
+async function loadConversation(filename, btnEl) {
+  console.log("[sidebar] Loading conversation:", filename);
+  try {
+    const res = await fetch(`/api/archives/${filename}`);
+    if (!res.ok) {
+      appendSystemMessage("Failed to load conversation.");
+      return;
+    }
+    const data = await res.json();
+    const messages = data.messages || [];
+
+    // Highlight active item
+    sidebarRecentsList.querySelectorAll(".sidebar-recent-item").forEach((el) => {
+      el.classList.remove("active");
+    });
+    if (btnEl) btnEl.classList.add("active");
+
+    // Display archived messages as read-only history
+    messagesEl.innerHTML = "";
+    messages.forEach((msg) => {
+      if (msg.role === "system") return;
+      appendMessage(msg.role, msg.content);
+    });
+
+    // Show the chat container if not visible
+    if (chatContainer.style.display === "none") {
+      modelOverlay.style.display = "none";
+      chatContainer.style.display = "flex";
+    }
+
+    appendSystemMessage("Viewing archived conversation. Send a message to start a new chat.");
+    scrollToBottom();
+  } catch (err) {
+    console.error("[sidebar] Failed to load conversation:", err);
+    appendSystemMessage("Failed to load conversation.");
+  }
+}
+
+// Sidebar event listeners
+document.getElementById("sidebar-toggle").addEventListener("click", toggleSidebar);
+document.getElementById("sidebar-new-chat").addEventListener("click", handleClear);
+document.getElementById("sidebar-switch-model").addEventListener("click", handleModelSwitch);
