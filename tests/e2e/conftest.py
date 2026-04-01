@@ -50,12 +50,14 @@ def server_url():
     port = _find_free_port()
 
     tmp_assistants = tempfile.mkdtemp()
+    tmp_archives = tempfile.mkdtemp()
 
     with (
         patch("ollama.chat", side_effect=_fake_ollama_chat),
         patch("ollama.list", side_effect=_fake_ollama_list),
         patch("ollama.show", side_effect=_fake_ollama_show),
         patch("local_llm.assistants.ASSISTANTS_DIR", tmp_assistants),
+        patch("local_llm.archive.ARCHIVE_DIR", tmp_archives),
     ):
         # Import app AFTER patching so module-level state picks up mocks
         from local_llm.api import app, sessions

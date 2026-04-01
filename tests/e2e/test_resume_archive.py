@@ -106,9 +106,9 @@ def test_switch_archive_saves_current_chat(chat_ready, test_archive):
     page.locator(".sidebar-recent-item").first.click()
     page.wait_for_selector(".message.user", timeout=5000)
 
-    # Wait for sidebar to refresh
-    page.wait_for_timeout(1000)
-
-    # Sidebar should now have one more item (the auto-saved chat)
-    new_count = page.locator(".sidebar-recent-item").count()
-    assert new_count > initial_count
+    # Wait for sidebar to gain a new item (the auto-saved chat)
+    expected = initial_count + 1
+    page.wait_for_function(
+        f'document.querySelectorAll(".sidebar-recent-item").length >= {expected}',
+        timeout=10000,
+    )
