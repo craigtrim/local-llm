@@ -386,6 +386,11 @@ html, body {
   color: var(--accent);
 }
 
+#send-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 #input-hint {
   text-align: center;
   font-size: 11px;

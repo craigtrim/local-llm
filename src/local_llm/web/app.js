@@ -5,6 +5,7 @@ let isStreaming = false;
 let streamBuffer = "";
 let activeAssistantEl = null;
 let commandHighlightIndex = 0;
+let maxInputChars = 32000;
 
 const messagesEl = document.getElementById("messages");
 const userInput = document.getElementById("user-input");
@@ -147,6 +148,10 @@ function sendMessage() {
   const text = userInput.value.trim();
   if (!text || isStreaming) {
     console.log("[send] Blocked: empty=", !text, "streaming=", isStreaming);
+    return;
+  }
+  if (text.length > maxInputChars) {
+    console.log("[send] Blocked: message too long", text.length, ">", maxInputChars);
     return;
   }
 
@@ -339,15 +344,19 @@ async function updateContextBar() {
   try {
     const res = await fetch(`/api/sessions/${sessionId}/status`);
     const data = await res.json();
-    const pct = data.pct_used;
-    const filled = Math.round(pct / 10);
+    const pct = Math.min(100, data.pct_used);
+    const filled = Math.min(10, Math.round(pct / 10));
     const color = pct > 80 ? "red" : pct > 50 ? "amber" : "green";
 
     document.querySelectorAll(".context-segment").forEach((seg, i) => {
       seg.className = "context-segment" + (i < filled ? ` filled ${color}` : "");
     });
     document.querySelector(".context-pct").textContent = `${Math.round(pct)}%`;
-    console.log("[contextBar] Updated: pct=%s filled=%d color=%s", pct, filled, color);
+    if (data.max_input_chars != null) {
+      maxInputChars = data.max_input_chars;
+      updateInputLimit();
+    }
+    console.log("[contextBar] Updated: pct=%s filled=%d color=%s maxInput=%d", pct, filled, color, maxInputChars);
   } catch (err) {
     console.error("[contextBar] Failed to update:", err);
   }
@@ -466,12 +475,46 @@ userInput.addEventListener("input", () => {
   } else {
     hideCommandPopup();
   }
+
+  updateInputLimit();
 });
 
 sendBtn.addEventListener("click", sendMessage);
 
 function resetTextarea() {
   userInput.style.height = "auto";
+  updateInputLimit();
+}
+
+// --- Input limit ---
+
+function updateInputLimit() {
+  const len = userInput.value.length;
+  const hintEl = document.getElementById("input-hint");
+  const pct = maxInputChars > 0 ? len / maxInputChars : 0;
+
+  if (pct < 0.5) {
+    hintEl.textContent = "Enter to send, Shift+Enter for newline";
+    hintEl.style.color = "";
+    sendBtn.disabled = false;
+    return;
+  }
+
+  const display = `${len.toLocaleString()} / ${maxInputChars.toLocaleString()} chars`;
+
+  if (pct >= 1.0) {
+    hintEl.textContent = `Message too long (${display})`;
+    hintEl.style.color = "var(--error)";
+    sendBtn.disabled = true;
+  } else if (pct >= 0.9) {
+    hintEl.textContent = display;
+    hintEl.style.color = "var(--error)";
+    sendBtn.disabled = false;
+  } else {
+    hintEl.textContent = display;
+    hintEl.style.color = "var(--text-secondary)";
+    sendBtn.disabled = false;
+  }
 }
 
 // --- Header button handlers ---

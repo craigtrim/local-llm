@@ -35,6 +35,7 @@ TITLE_PROMPT = _model.get(
     "Respond with only the title, no quotes or punctuation.",
 )
 TITLE_AFTER_EXCHANGES = _model.get("title_after_exchanges", 1)
+MAX_INPUT_CHARS = _model.get("max_input_chars", 32000)
 
 # General config
 ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")

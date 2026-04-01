@@ -11,7 +11,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import archive, client
-from .config import SUMMARIZE_PROMPT, SUMMARY_MODEL, SYSTEM_PROMPT, TITLE_PROMPT
+from .config import (
+    MAX_INPUT_CHARS,
+    SUMMARIZE_PROMPT,
+    SUMMARY_MODEL,
+    SYSTEM_PROMPT,
+    TITLE_PROMPT,
+    TOKEN_ESTIMATE_RATIO,
+)
 from .history import ConversationHistory
 
 log = logging.getLogger("local_llm.api")
@@ -89,6 +96,8 @@ async def get_status(session_id: str) -> dict:
     model, history = _get_session(session_id)
     stats = history.stats()
     stats["model"] = model
+    dynamic_chars = int(stats["tokens_remaining"] * TOKEN_ESTIMATE_RATIO)
+    stats["max_input_chars"] = min(MAX_INPUT_CHARS, dynamic_chars)
     log.info("Status: %s", stats)
     return stats
 
@@ -153,6 +162,17 @@ async def websocket_chat(ws: WebSocket, session_id: str):
             user_text = await ws.receive_text()
             log.info("WebSocket received message: %s", user_text[:100])
             model, history = sessions[session_id]
+
+            stats = history.stats()
+            dynamic_chars = int(stats["tokens_remaining"] * TOKEN_ESTIMATE_RATIO)
+            char_limit = min(MAX_INPUT_CHARS, dynamic_chars)
+            if len(user_text) > char_limit:
+                log.warning("Message too long: %d chars, limit %d", len(user_text), char_limit)
+                await ws.send_json({
+                    "type": "error",
+                    "content": f"Message too long ({len(user_text):,} chars, limit {char_limit:,})",
+                })
+                continue
 
             history.add("user", user_text)
             messages = history.get_messages()

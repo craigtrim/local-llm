@@ -93,7 +93,8 @@ class ConversationHistory:
         return {
             "tokens_used": tokens_used,
             "token_budget": budget,
-            "pct_used": round(tokens_used / budget * 100, 1) if budget else 0,
+            "tokens_remaining": max(0, budget - tokens_used),
+            "pct_used": min(100.0, round(tokens_used / budget * 100, 1)) if budget > 0 else 0,
             "qa_count": qa_count,
             "summary_count": self._summary_count,
             "title": self.title,

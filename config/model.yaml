@@ -11,3 +11,4 @@ title_prompt: >-
   Give this conversation a short title (under 8 words).
   Respond with only the title, no quotes or punctuation.
 title_after_exchanges: 1
+max_input_chars: 32000
