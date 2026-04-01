@@ -84,6 +84,8 @@ def save(
     title: str | None = None,
     assistant_id: str | None = None,
     assistant_name: str | None = None,
+    assistant_uuid: str | None = None,
+    assistant_version: int | None = None,
     model: str | None = None,
     client_ip: str | None = None,
     user_agent: str | None = None,
@@ -107,11 +109,12 @@ def save(
         "model": model or "unknown",
         "client_ip": client_ip,
         "user_agent": user_agent,
+        "assistant_id": assistant_id,
+        "assistant_name": assistant_name,
+        "assistant_uuid": assistant_uuid,
+        "assistant_version": assistant_version,
         "messages": messages,
     }
-    if assistant_id:
-        data["assistant_id"] = assistant_id
-        data["assistant_name"] = assistant_name
 
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
@@ -146,6 +149,7 @@ def list_archives(limit: int = 50) -> list[dict]:
             "timestamp": f.stem.split("_")[0] if "_" in f.stem else f.stem,
             "assistant_id": data.get("assistant_id"),
             "assistant_name": data.get("assistant_name"),
+            "assistant_uuid": data.get("assistant_uuid"),
         })
     return results
 

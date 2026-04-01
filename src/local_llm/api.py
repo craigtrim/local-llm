@@ -37,8 +37,9 @@ class SessionInfo(NamedTuple):
     assistant_id: str | None
     assistant_name: str | None
     assistant_color: str | None
+    assistant_uuid: str | None
+    assistant_version: int | None
     history: ConversationHistory
-    # Session metadata captured from request (see #19)
     created_at: str = ""
     client_ip: str | None = None
     user_agent: str | None = None
@@ -74,10 +75,13 @@ def _create_session(model: str, assistant_config: dict | None = None) -> tuple[s
         return client.summarize(msgs, summary_model, SUMMARIZE_PROMPT)
 
     def on_truncate(msgs: list[dict]) -> None:
-        archive.save(msgs)
+        archive.save(msgs, model=model)
 
     def title_fn(msgs: list[dict]) -> str:
         return client.generate_title(msgs, summary_model, TITLE_PROMPT)
+
+    a_uuid = assistant_config.get("uuid") if assistant_config else None
+    a_name = assistant_config.get("name") if assistant_config else None
 
     history = ConversationHistory(
         context_limit=context_length,
@@ -86,6 +90,8 @@ def _create_session(model: str, assistant_config: dict | None = None) -> tuple[s
         title_fn=title_fn,
         token_estimate_ratio=token_estimate_ratio,
         context_reserve=context_reserve,
+        assistant_uuid=a_uuid,
+        assistant_name=a_name,
     )
     if system_prompt:
         history.add("system", system_prompt)
@@ -195,6 +201,9 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
     if not model:
         raise HTTPException(status_code=400, detail="Model is required")
 
+    a_uuid = assistant_config.get("uuid") if assistant_config else None
+    a_version = assistant_config.get("version") if assistant_config else None
+
     sid, history = await asyncio.to_thread(_create_session, model, assistant_config)
     now = datetime.now(timezone.utc).isoformat()
     client_ip = request.client.host if request.client else None
@@ -204,6 +213,8 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
         assistant_id=assistant_id,
         assistant_name=assistant_name,
         assistant_color=assistant_color,
+        assistant_uuid=a_uuid,
+        assistant_version=a_version,
         history=history,
         created_at=now,
         client_ip=client_ip,
@@ -217,6 +228,7 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
         "assistant_id": assistant_id,
         "assistant_name": assistant_name,
         "assistant_color": assistant_color,
+        "assistant_uuid": a_uuid,
     }
 
 
@@ -245,6 +257,7 @@ async def clear_session(session_id: str) -> dict:
     await asyncio.to_thread(
         archive.save, info.history.messages, info.history.title,
         info.assistant_id, info.assistant_name,
+        info.assistant_uuid, info.assistant_version,
         info.model, info.client_ip, info.user_agent, info.created_at,
     )
 
@@ -260,6 +273,8 @@ async def clear_session(session_id: str) -> dict:
         assistant_id=info.assistant_id,
         assistant_name=info.assistant_name,
         assistant_color=info.assistant_color,
+        assistant_uuid=info.assistant_uuid,
+        assistant_version=info.assistant_version,
         history=new_history,
         created_at=now,
         client_ip=info.client_ip,
@@ -326,12 +341,15 @@ async def resume_session(body: ResumeSessionRequest, request: Request) -> dict:
     assistant_name = None
     assistant_color = None
 
+    a_uuid = data.get("assistant_uuid")
     if assistant_id:
         assistant_config = await asyncio.to_thread(assistants.get_assistant, assistant_id)
         if assistant_config:
             assistant_name = assistant_config.get("name")
             assistant_color = assistant_config.get("avatar_color")
+            a_uuid = a_uuid or assistant_config.get("uuid")
 
+    a_version = assistant_config.get("version") if assistant_config else None
     model = body.model or (assistant_config and assistant_config.get("model"))
     if not model:
         raise HTTPException(status_code=400, detail="Model is required")
@@ -353,6 +371,8 @@ async def resume_session(body: ResumeSessionRequest, request: Request) -> dict:
         assistant_id=assistant_id,
         assistant_name=assistant_name,
         assistant_color=assistant_color,
+        assistant_uuid=a_uuid,
+        assistant_version=a_version,
         history=history,
         created_at=now,
         client_ip=client_ip,
@@ -369,6 +389,7 @@ async def resume_session(body: ResumeSessionRequest, request: Request) -> dict:
         "assistant_id": assistant_id,
         "assistant_name": assistant_name,
         "assistant_color": assistant_color,
+        "assistant_uuid": a_uuid,
     }
 
 
@@ -384,6 +405,7 @@ async def change_model(session_id: str, body: ChangeModelRequest, request: Reque
     await asyncio.to_thread(
         archive.save, info.history.messages, info.history.title,
         info.assistant_id, info.assistant_name,
+        info.assistant_uuid, info.assistant_version,
         info.model, info.client_ip, info.user_agent, info.created_at,
     )
     now = datetime.now(timezone.utc).isoformat()
@@ -395,6 +417,8 @@ async def change_model(session_id: str, body: ChangeModelRequest, request: Reque
         assistant_id=None,
         assistant_name=None,
         assistant_color=None,
+        assistant_uuid=None,
+        assistant_version=None,
         history=new_history,
         created_at=now,
         client_ip=client_ip,
@@ -417,6 +441,7 @@ async def change_assistant(session_id: str, body: ChangeAssistantRequest, reques
     await asyncio.to_thread(
         archive.save, info.history.messages, info.history.title,
         info.assistant_id, info.assistant_name,
+        info.assistant_uuid, info.assistant_version,
         info.model, info.client_ip, info.user_agent, info.created_at,
     )
 
@@ -437,6 +462,8 @@ async def change_assistant(session_id: str, body: ChangeAssistantRequest, reques
         assistant_id=assistant_config["id"],
         assistant_name=assistant_config.get("name"),
         assistant_color=assistant_config.get("avatar_color"),
+        assistant_uuid=assistant_config.get("uuid"),
+        assistant_version=assistant_config.get("version"),
         history=new_history,
         created_at=now,
         client_ip=client_ip,

@@ -13,6 +13,8 @@ class ConversationHistory:
         title_fn: Callable[[list[dict]], str] | None = None,
         token_estimate_ratio: float | None = None,
         context_reserve: int | None = None,
+        assistant_uuid: str | None = None,
+        assistant_name: str | None = None,
     ) -> None:
         self._messages: list[dict] = []
         self._context_limit = context_limit
@@ -24,18 +26,23 @@ class ConversationHistory:
         self._user_renamed = False
         self._token_estimate_ratio = token_estimate_ratio or TOKEN_ESTIMATE_RATIO
         self._context_reserve = context_reserve or CONTEXT_RESERVE
+        self._assistant_uuid = assistant_uuid
+        self._assistant_name = assistant_name
 
     @property
     def messages(self) -> list[dict]:
         return list(self._messages)
 
     def add(self, role: str, content: str) -> None:
-        # Per-message timestamps for archive metadata (see #19)
-        self._messages.append({
+        msg: dict = {
             "role": role,
             "content": content,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        if role == "assistant" and self._assistant_uuid:
+            msg["assistant_uuid"] = self._assistant_uuid
+            msg["assistant_name"] = self._assistant_name
+        self._messages.append(msg)
         if role == "assistant" and not self.title and not self._user_renamed:
             self._maybe_generate_title()
 
