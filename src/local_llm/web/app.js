@@ -6,6 +6,7 @@ let streamBuffer = "";
 let activeAssistantEl = null;
 let commandHighlightIndex = 0;
 let maxInputChars = 32000;
+let currentArchiveFilename = null;
 
 const messagesEl = document.getElementById("messages");
 const userInput = document.getElementById("user-input");
@@ -85,6 +86,7 @@ async function selectModel(model) {
     console.log("[selectModel] Session created:", data);
     sessionId = data.session_id;
     currentModel = model;
+    currentArchiveFilename = null;
     headerModel.textContent = model;
     sidebarModelName.textContent = "model: " + model;
     modelOverlay.style.display = "none";
@@ -305,6 +307,7 @@ async function handleClear() {
     const data = await res.json();
     console.log("[clear] New session:", data);
     sessionId = data.session_id;
+    currentArchiveFilename = null;
     messagesEl.innerHTML = "";
     headerTitle.textContent = "local-llm";
     document.title = "local-llm";
@@ -320,6 +323,7 @@ async function handleClear() {
 
 async function handleModelSwitch() {
   console.log("[model] Switching model, closing WebSocket");
+  currentArchiveFilename = null;
   modelOverlay.style.display = "flex";
   chatContainer.style.display = "none";
   if (ws) ws.close();
@@ -638,6 +642,7 @@ document.getElementById("context-clear-btn").addEventListener("click", async () 
     const res = await fetch(`/api/sessions/${sessionId}/clear`, { method: "POST" });
     const data = await res.json();
     sessionId = data.session_id;
+    currentArchiveFilename = null;
     messagesEl.innerHTML = "";
     headerTitle.textContent = "local-llm";
     document.title = "local-llm";
@@ -727,6 +732,11 @@ async function loadArchives() {
 async function loadConversation(filename, btnEl) {
   console.log("[sidebar] Loading conversation:", filename);
 
+  if (filename === currentArchiveFilename) {
+    console.log("[sidebar] Already viewing this archive, skipping");
+    return;
+  }
+
   if (!currentModel) {
     console.log("[sidebar] No model selected, showing model overlay");
     modelOverlay.style.display = "flex";
@@ -734,6 +744,12 @@ async function loadConversation(filename, btnEl) {
   }
 
   try {
+    // Archive current session before switching
+    if (sessionId) {
+      console.log("[sidebar] Archiving current session before switch:", sessionId);
+      await fetch(`/api/sessions/${sessionId}/clear`, { method: "POST" });
+    }
+
     // Resume: create a new session seeded with archived messages
     const resumeRes = await fetch("/api/sessions/resume", {
       method: "POST",
@@ -784,7 +800,9 @@ async function loadConversation(filename, btnEl) {
       chatContainer.style.display = "flex";
     }
 
+    currentArchiveFilename = filename;
     updateContextBar();
+    loadArchives();
     scrollToBottom();
     userInput.focus();
   } catch (err) {
