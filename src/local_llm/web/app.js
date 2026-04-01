@@ -511,8 +511,18 @@ async function handleAssistantSwitch() {
   currentArchiveFilename = null;
   assistantOverlay.style.display = "flex";
   chatContainer.style.display = "none";
+  // Show close button since user has an active session to return to
+  document.getElementById("assistant-picker-close").style.display = "";
   if (ws) ws.close();
   await init();
+}
+
+// 3-dismiss pattern for assistant picker (see #23)
+function closeAssistantPicker() {
+  if (!sessionId) return; // Can't dismiss on initial load — must pick an assistant
+  assistantOverlay.style.display = "none";
+  chatContainer.style.display = "flex";
+  connectWebSocket();
 }
 
 async function handleStatus() {
@@ -816,9 +826,21 @@ headerTitle.addEventListener("click", () => {
   });
 });
 
-// --- Context modal ---
+// --- Context modal (3-dismiss pattern: close button, Esc, backdrop — see #25) ---
 
 document.getElementById("context-close-btn").addEventListener("click", closeContextModal);
+
+// Consolidated Escape handler for all modals (see #22)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (document.getElementById("context-overlay").style.display === "flex") {
+    closeContextModal();
+  } else if (document.getElementById("assistant-wizard-overlay").style.display === "flex") {
+    closeWizard();
+  } else if (assistantOverlay.style.display === "flex") {
+    closeAssistantPicker();
+  }
+});
 
 document.getElementById("context-overlay").addEventListener("click", (e) => {
   const modal = document.querySelector(".context-modal");
@@ -1036,6 +1058,18 @@ async function loadConversation(filename, btnEl, archiveAssistantId) {
 document.getElementById("sidebar-toggle").addEventListener("click", toggleSidebar);
 document.getElementById("sidebar-new-chat").addEventListener("click", handleClear);
 document.getElementById("sidebar-switch-assistant").addEventListener("click", handleAssistantSwitch);
+
+// --- Assistant picker dismiss (see #23) ---
+
+document.getElementById("assistant-picker-close").addEventListener("click", closeAssistantPicker);
+
+assistantOverlay.addEventListener("click", (e) => {
+  if (e.target === assistantOverlay) {
+    closeAssistantPicker();
+  }
+});
+
+// Escape handled by consolidated handler in context modal section (see #22)
 
 // --- Assistant Wizard ---
 
@@ -1274,7 +1308,8 @@ document.getElementById("wizard-advanced-toggle").addEventListener("click", () =
   toggle.classList.toggle("open", !isOpen);
 });
 
-// Close wizard on overlay click (outside modal)
+// Escape handled by consolidated handler in context modal section (see #22)
+// Backdrop click (see #24):
 document.getElementById("assistant-wizard-overlay").addEventListener("click", (e) => {
   if (e.target === document.getElementById("assistant-wizard-overlay")) {
     closeWizard();

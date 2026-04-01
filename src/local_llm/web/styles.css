@@ -68,6 +68,17 @@ html, body {
   max-height: 80vh;
 }
 
+.assistant-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.assistant-picker-header h2 {
+  margin-bottom: 0;
+}
+
 .assistant-picker h2 {
   font-size: 18px;
   font-weight: 600;
