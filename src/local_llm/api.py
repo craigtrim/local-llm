@@ -3,15 +3,17 @@ import logging
 import queue
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 import ollama as ollama_lib
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import archive, client
+from . import archive, assistants, client
 from .config import (
     MAX_INPUT_CHARS,
     SUMMARIZE_PROMPT,
@@ -29,20 +31,43 @@ app = FastAPI(title="local-llm")
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
-sessions: dict[str, tuple[str, ConversationHistory]] = {}
+
+class SessionInfo(NamedTuple):
+    model: str
+    assistant_id: str | None
+    assistant_name: str | None
+    assistant_color: str | None
+    history: ConversationHistory
+    created_at: str = ""
+    client_ip: str | None = None
+    user_agent: str | None = None
 
 
-def _get_session(session_id: str) -> tuple[str, ConversationHistory]:
+sessions: dict[str, SessionInfo] = {}
+
+
+def _get_session(session_id: str) -> SessionInfo:
     if session_id not in sessions:
         log.warning("Session not found: %s", session_id)
         raise HTTPException(status_code=404, detail="Session not found")
     return sessions[session_id]
 
 
-def _create_session(model: str) -> tuple[str, ConversationHistory]:
+def _create_session(model: str, assistant_config: dict | None = None) -> tuple[str, ConversationHistory]:
     context_length = client.get_context_length(model)
     summary_model = SUMMARY_MODEL or model
     log.info("Creating session for model=%s context_length=%d", model, context_length)
+
+    # Apply assistant overrides
+    system_prompt = SYSTEM_PROMPT
+    token_estimate_ratio = None
+    context_reserve = None
+    if assistant_config:
+        system_prompt = assistant_config.get("system_prompt") or SYSTEM_PROMPT
+        if assistant_config.get("context_tokens"):
+            context_length = min(context_length, assistant_config["context_tokens"])
+        token_estimate_ratio = assistant_config.get("token_estimate_ratio")
+        context_reserve = assistant_config.get("context_reserve")
 
     def summarize_fn(msgs: list[dict]) -> str:
         return client.summarize(msgs, summary_model, SUMMARIZE_PROMPT)
@@ -58,9 +83,11 @@ def _create_session(model: str) -> tuple[str, ConversationHistory]:
         summarize_fn=summarize_fn,
         on_truncate=on_truncate,
         title_fn=title_fn,
+        token_estimate_ratio=token_estimate_ratio,
+        context_reserve=context_reserve,
     )
-    if SYSTEM_PROMPT:
-        history.add("system", SYSTEM_PROMPT)
+    if system_prompt:
+        history.add("system", system_prompt)
 
     session_id = uuid.uuid4().hex[:12]
     log.info("Session created: %s", session_id)
@@ -78,26 +105,132 @@ async def get_models() -> dict:
     return {"models": models}
 
 
+# --- Assistant endpoints ---
+
+
+@app.get("/api/assistants")
+async def get_assistants() -> dict:
+    log.info("GET /api/assistants")
+    result = await asyncio.to_thread(assistants.list_assistants)
+    return {"assistants": result}
+
+
+class SaveAssistantRequest(BaseModel):
+    name: str
+    model: str | None = None
+    system_prompt: str
+    description: str | None = None
+    avatar_color: str | None = None
+    context_tokens: int | None = None
+    token_estimate_ratio: float | None = None
+    context_reserve: int | None = None
+
+
+@app.post("/api/assistants")
+async def create_assistant(body: SaveAssistantRequest) -> dict:
+    log.info("POST /api/assistants name=%s", body.name)
+    config = body.model_dump(exclude_none=True)
+    try:
+        saved = await asyncio.to_thread(assistants.save_assistant, config)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return saved
+
+
+@app.put("/api/assistants/{assistant_id}")
+async def update_assistant(assistant_id: str, body: SaveAssistantRequest) -> dict:
+    log.info("PUT /api/assistants/%s", assistant_id)
+    existing = await asyncio.to_thread(assistants.get_assistant, assistant_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    config = body.model_dump(exclude_none=True)
+    config["id"] = assistant_id
+    try:
+        saved = await asyncio.to_thread(assistants.save_assistant, config)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return saved
+
+
+@app.delete("/api/assistants/{assistant_id}")
+async def delete_assistant_endpoint(assistant_id: str) -> dict:
+    log.info("DELETE /api/assistants/%s", assistant_id)
+    try:
+        deleted = await asyncio.to_thread(assistants.delete_assistant, assistant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+    return {"deleted": assistant_id}
+
+
+# --- Session endpoints ---
+
+
 class CreateSessionRequest(BaseModel):
-    model: str
+    model: str | None = None
+    assistant_id: str | None = None
 
 
 @app.post("/api/sessions")
-async def create_session(body: CreateSessionRequest) -> dict:
-    log.info("POST /api/sessions model=%s", body.model)
-    sid, history = await asyncio.to_thread(_create_session, body.model)
-    sessions[sid] = (body.model, history)
-    ctx = await asyncio.to_thread(client.get_context_length, body.model)
-    return {"session_id": sid, "model": body.model, "context_length": ctx}
+async def create_session(body: CreateSessionRequest, request: Request) -> dict:
+    log.info("POST /api/sessions model=%s assistant_id=%s", body.model, body.assistant_id)
+    assistant_config = None
+    assistant_id = None
+    assistant_name = None
+    assistant_color = None
+
+    if body.assistant_id:
+        assistant_config = await asyncio.to_thread(assistants.get_assistant, body.assistant_id)
+        if not assistant_config:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+        model = body.model or assistant_config.get("model")
+        assistant_id = assistant_config["id"]
+        assistant_name = assistant_config.get("name")
+        assistant_color = assistant_config.get("avatar_color")
+    else:
+        model = body.model
+
+    if not model:
+        raise HTTPException(status_code=400, detail="Model is required")
+
+    sid, history = await asyncio.to_thread(_create_session, model, assistant_config)
+    now = datetime.now(timezone.utc).isoformat()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    sessions[sid] = SessionInfo(
+        model=model,
+        assistant_id=assistant_id,
+        assistant_name=assistant_name,
+        assistant_color=assistant_color,
+        history=history,
+        created_at=now,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
+    ctx = await asyncio.to_thread(client.get_context_length, model)
+    return {
+        "session_id": sid,
+        "model": model,
+        "context_length": ctx,
+        "assistant_id": assistant_id,
+        "assistant_name": assistant_name,
+        "assistant_color": assistant_color,
+    }
 
 
 @app.get("/api/sessions/{session_id}/status")
 async def get_status(session_id: str) -> dict:
     log.info("GET /api/sessions/%s/status", session_id)
-    model, history = _get_session(session_id)
-    stats = history.stats()
-    stats["model"] = model
-    dynamic_chars = int(stats["tokens_remaining"] * TOKEN_ESTIMATE_RATIO)
+    info = _get_session(session_id)
+    stats = info.history.stats()
+    stats["model"] = info.model
+    stats["assistant_id"] = info.assistant_id
+    stats["assistant_name"] = info.assistant_name
+    stats["created_at"] = info.created_at
+    stats["client_ip"] = info.client_ip
+    ratio = info.history.token_estimate_ratio
+    dynamic_chars = int(stats["tokens_remaining"] * ratio)
     stats["max_input_chars"] = min(MAX_INPUT_CHARS, dynamic_chars)
     log.info("Status: %s", stats)
     return stats
@@ -106,13 +239,33 @@ async def get_status(session_id: str) -> dict:
 @app.post("/api/sessions/{session_id}/clear")
 async def clear_session(session_id: str) -> dict:
     log.info("POST /api/sessions/%s/clear", session_id)
-    model, history = _get_session(session_id)
+    info = _get_session(session_id)
     sessions.pop(session_id)
-    await asyncio.to_thread(archive.save, history.messages)
-    new_sid, new_history = await asyncio.to_thread(_create_session, model)
-    sessions[new_sid] = (model, new_history)
+    await asyncio.to_thread(
+        archive.save, info.history.messages, info.history.title,
+        info.assistant_id, info.assistant_name,
+        info.model, info.client_ip, info.user_agent, info.created_at,
+    )
+
+    # Reload assistant config to preserve it in the new session
+    assistant_config = None
+    if info.assistant_id:
+        assistant_config = await asyncio.to_thread(assistants.get_assistant, info.assistant_id)
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_sid, new_history = await asyncio.to_thread(_create_session, info.model, assistant_config)
+    sessions[new_sid] = SessionInfo(
+        model=info.model,
+        assistant_id=info.assistant_id,
+        assistant_name=info.assistant_name,
+        assistant_color=info.assistant_color,
+        history=new_history,
+        created_at=now,
+        client_ip=info.client_ip,
+        user_agent=info.user_agent,
+    )
     log.info("Session cleared, new session: %s", new_sid)
-    return {"session_id": new_sid, "model": model}
+    return {"session_id": new_sid, "model": info.model}
 
 
 class RenameTitleRequest(BaseModel):
@@ -122,9 +275,9 @@ class RenameTitleRequest(BaseModel):
 @app.post("/api/sessions/{session_id}/title")
 async def rename_title(session_id: str, body: RenameTitleRequest) -> dict:
     log.info("POST /api/sessions/%s/title -> %s", session_id, body.title)
-    _, history = _get_session(session_id)
-    history.set_title(body.title)
-    return {"title": history.title}
+    info = _get_session(session_id)
+    info.history.set_title(body.title)
+    return {"title": info.history.title}
 
 
 @app.get("/api/archives")
@@ -147,25 +300,42 @@ async def delete_archive(filename: str) -> dict:
 @app.get("/api/archives/{filename}")
 async def get_archive(filename: str) -> dict:
     log.info("GET /api/archives/%s", filename)
-    messages = await asyncio.to_thread(archive.load_archive, filename)
-    if not messages:
+    data = await asyncio.to_thread(archive.load_archive, filename)
+    if not data:
         raise HTTPException(status_code=404, detail="Archive not found")
-    return {"messages": messages}
+    return {"messages": data.get("messages", [])}
 
 
 class ResumeSessionRequest(BaseModel):
-    model: str
+    model: str | None = None
     filename: str
+    assistant_id: str | None = None
 
 
 @app.post("/api/sessions/resume")
-async def resume_session(body: ResumeSessionRequest) -> dict:
-    log.info("POST /api/sessions/resume model=%s filename=%s", body.model, body.filename)
-    messages = await asyncio.to_thread(archive.load_archive, body.filename)
-    if not messages:
+async def resume_session(body: ResumeSessionRequest, request: Request) -> dict:
+    log.info("POST /api/sessions/resume filename=%s assistant_id=%s", body.filename, body.assistant_id)
+    data = await asyncio.to_thread(archive.load_archive, body.filename)
+    if not data:
         raise HTTPException(status_code=404, detail="Archive not found or invalid")
 
-    sid, history = await asyncio.to_thread(_create_session, body.model)
+    messages = data.get("messages", [])
+    assistant_config = None
+    assistant_id = body.assistant_id or data.get("assistant_id")
+    assistant_name = None
+    assistant_color = None
+
+    if assistant_id:
+        assistant_config = await asyncio.to_thread(assistants.get_assistant, assistant_id)
+        if assistant_config:
+            assistant_name = assistant_config.get("name")
+            assistant_color = assistant_config.get("avatar_color")
+
+    model = body.model or (assistant_config and assistant_config.get("model"))
+    if not model:
+        raise HTTPException(status_code=400, detail="Model is required")
+
+    sid, history = await asyncio.to_thread(_create_session, model, assistant_config)
 
     restored = 0
     for msg in messages:
@@ -174,15 +344,30 @@ async def resume_session(body: ResumeSessionRequest) -> dict:
         history.add(msg["role"], msg["content"])
         restored += 1
 
-    sessions[sid] = (body.model, history)
-    ctx = await asyncio.to_thread(client.get_context_length, body.model)
+    now = datetime.now(timezone.utc).isoformat()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    sessions[sid] = SessionInfo(
+        model=model,
+        assistant_id=assistant_id,
+        assistant_name=assistant_name,
+        assistant_color=assistant_color,
+        history=history,
+        created_at=now,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
+    ctx = await asyncio.to_thread(client.get_context_length, model)
     log.info("Session resumed: %s with %d messages restored", sid, restored)
     return {
         "session_id": sid,
-        "model": body.model,
+        "model": model,
         "context_length": ctx,
         "messages_restored": restored,
         "title": history.title,
+        "assistant_id": assistant_id,
+        "assistant_name": assistant_name,
+        "assistant_color": assistant_color,
     }
 
 
@@ -191,15 +376,80 @@ class ChangeModelRequest(BaseModel):
 
 
 @app.post("/api/sessions/{session_id}/model")
-async def change_model(session_id: str, body: ChangeModelRequest) -> dict:
+async def change_model(session_id: str, body: ChangeModelRequest, request: Request) -> dict:
     log.info("POST /api/sessions/%s/model -> %s", session_id, body.model)
-    _, old_history = _get_session(session_id)
+    info = _get_session(session_id)
     sessions.pop(session_id)
-    await asyncio.to_thread(archive.save, old_history.messages)
+    await asyncio.to_thread(
+        archive.save, info.history.messages, info.history.title,
+        info.assistant_id, info.assistant_name,
+        info.model, info.client_ip, info.user_agent, info.created_at,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     new_sid, new_history = await asyncio.to_thread(_create_session, body.model)
-    sessions[new_sid] = (body.model, new_history)
+    sessions[new_sid] = SessionInfo(
+        model=body.model,
+        assistant_id=None,
+        assistant_name=None,
+        assistant_color=None,
+        history=new_history,
+        created_at=now,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
     ctx = await asyncio.to_thread(client.get_context_length, body.model)
     return {"session_id": new_sid, "model": body.model, "context_length": ctx}
+
+
+class ChangeAssistantRequest(BaseModel):
+    assistant_id: str
+    model: str | None = None
+
+
+@app.post("/api/sessions/{session_id}/assistant")
+async def change_assistant(session_id: str, body: ChangeAssistantRequest, request: Request) -> dict:
+    log.info("POST /api/sessions/%s/assistant -> %s", session_id, body.assistant_id)
+    info = _get_session(session_id)
+    sessions.pop(session_id)
+    await asyncio.to_thread(
+        archive.save, info.history.messages, info.history.title,
+        info.assistant_id, info.assistant_name,
+        info.model, info.client_ip, info.user_agent, info.created_at,
+    )
+
+    assistant_config = await asyncio.to_thread(assistants.get_assistant, body.assistant_id)
+    if not assistant_config:
+        raise HTTPException(status_code=404, detail="Assistant not found")
+
+    model = body.model or assistant_config.get("model")
+    if not model:
+        raise HTTPException(status_code=400, detail="Model is required")
+
+    now = datetime.now(timezone.utc).isoformat()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    new_sid, new_history = await asyncio.to_thread(_create_session, model, assistant_config)
+    sessions[new_sid] = SessionInfo(
+        model=model,
+        assistant_id=assistant_config["id"],
+        assistant_name=assistant_config.get("name"),
+        assistant_color=assistant_config.get("avatar_color"),
+        history=new_history,
+        created_at=now,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
+    ctx = await asyncio.to_thread(client.get_context_length, model)
+    return {
+        "session_id": new_sid,
+        "model": model,
+        "context_length": ctx,
+        "assistant_id": assistant_config["id"],
+        "assistant_name": assistant_config.get("name"),
+        "assistant_color": assistant_config.get("avatar_color"),
+    }
 
 
 # --- WebSocket streaming chat ---
@@ -224,10 +474,13 @@ async def websocket_chat(ws: WebSocket, session_id: str):
                 log.info("Ignoring stale stop signal")
                 continue
             log.info("WebSocket received message: %s", user_text[:100])
-            model, history = sessions[session_id]
+            info = sessions[session_id]
+            model = info.model
+            history = info.history
 
             stats = history.stats()
-            dynamic_chars = int(stats["tokens_remaining"] * TOKEN_ESTIMATE_RATIO)
+            ratio = history.token_estimate_ratio
+            dynamic_chars = int(stats["tokens_remaining"] * ratio)
             char_limit = min(MAX_INPUT_CHARS, dynamic_chars)
             if len(user_text) > char_limit:
                 log.warning("Message too long: %d chars, limit %d", len(user_text), char_limit)

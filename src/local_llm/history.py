@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from .config import CONTEXT_RESERVE, TITLE_AFTER_EXCHANGES, TOKEN_ESTIMATE_RATIO
 
@@ -10,6 +11,8 @@ class ConversationHistory:
         summarize_fn: Callable[[list[dict]], str] | None = None,
         on_truncate: Callable[[list[dict]], None] | None = None,
         title_fn: Callable[[list[dict]], str] | None = None,
+        token_estimate_ratio: float | None = None,
+        context_reserve: int | None = None,
     ) -> None:
         self._messages: list[dict] = []
         self._context_limit = context_limit
@@ -19,13 +22,19 @@ class ConversationHistory:
         self._summary_count = 0
         self.title: str | None = None
         self._user_renamed = False
+        self._token_estimate_ratio = token_estimate_ratio or TOKEN_ESTIMATE_RATIO
+        self._context_reserve = context_reserve or CONTEXT_RESERVE
 
     @property
     def messages(self) -> list[dict]:
         return list(self._messages)
 
     def add(self, role: str, content: str) -> None:
-        self._messages.append({"role": role, "content": content})
+        self._messages.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         if role == "assistant" and not self.title and not self._user_renamed:
             self._maybe_generate_title()
 
@@ -45,13 +54,13 @@ class ConversationHistory:
             pass
 
     def get_messages(self) -> list[dict]:
-        budget = self._context_limit - CONTEXT_RESERVE
+        budget = self._context_limit - self._context_reserve
         if self._estimate_tokens(self._messages) <= budget:
             return list(self._messages)
         return self._truncate(budget)
 
     def _estimate_tokens(self, messages: list[dict]) -> int:
-        return int(sum(len(m["content"]) / TOKEN_ESTIMATE_RATIO for m in messages))
+        return int(sum(len(m["content"]) / self._token_estimate_ratio for m in messages))
 
     def _truncate(self, budget: int) -> list[dict]:
         if self._on_truncate:
@@ -86,9 +95,13 @@ class ConversationHistory:
 
         return system + [summary_msg] + conversation
 
+    @property
+    def token_estimate_ratio(self) -> float:
+        return self._token_estimate_ratio
+
     def stats(self) -> dict:
         tokens_used = self._estimate_tokens(self._messages)
-        budget = self._context_limit - CONTEXT_RESERVE
+        budget = self._context_limit - self._context_reserve
         qa_count = sum(1 for m in self._messages if m["role"] == "user")
         return {
             "tokens_used": tokens_used,

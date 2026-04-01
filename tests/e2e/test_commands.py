@@ -27,18 +27,18 @@ def test_clear_resets_conversation(chat_ready):
     assert "Conversation cleared" in page.locator(".message.system").text_content()
 
 
-def test_model_switch_shows_overlay(chat_ready):
-    """The /model header button shows the model selection overlay."""
+def test_assistant_switch_shows_overlay(chat_ready):
+    """The /assistant header button shows the assistant selection overlay."""
     page = chat_ready
 
-    page.click("#model-btn")
+    page.click("#assistant-btn")
 
-    page.wait_for_selector("#model-overlay", state="visible", timeout=3000)
+    page.wait_for_selector("#assistant-overlay", state="visible", timeout=3000)
     assert not page.locator("#chat-container").is_visible()
 
-    # Model buttons should still be rendered
-    buttons = page.locator(".model-option")
-    assert buttons.count() == len(FAKE_MODELS)
+    # Assistant cards should be rendered
+    cards = page.locator(".assistant-card")
+    assert cards.count() >= 1
 
 
 def test_status_shows_details(chat_ready):

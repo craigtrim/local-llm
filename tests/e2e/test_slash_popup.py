@@ -11,7 +11,7 @@ def test_slash_shows_popup(chat_ready):
 
     names = [items.nth(i).locator(".command-name").text_content() for i in range(3)]
     assert "/clear" in names
-    assert "/model" in names
+    assert "/assistant" in names
     assert "/status" in names
 
 

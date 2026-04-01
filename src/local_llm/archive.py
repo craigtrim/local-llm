@@ -39,6 +39,18 @@ def validate_archive(data: object, filename: str | None = None) -> list[str]:
         errors.append(f"{prefix}'messages' must be a list, got {type(messages).__name__}")
         return errors
 
+    for key in ("created_at", "archived_at", "model"):
+        if key not in data:
+            errors.append(f"{prefix}missing '{key}' key")
+        elif not isinstance(data[key], str):
+            errors.append(f"{prefix}'{key}' must be a string, got {type(data[key]).__name__}")
+
+    for key in ("client_ip", "user_agent"):
+        if key not in data:
+            errors.append(f"{prefix}missing '{key}' key")
+        elif data[key] is not None and not isinstance(data[key], str):
+            errors.append(f"{prefix}'{key}' must be a string or null, got {type(data[key]).__name__}")
+
     for i, msg in enumerate(messages):
         if not isinstance(msg, dict):
             errors.append(f"{prefix}messages[{i}] must be a dict, got {type(msg).__name__}")
@@ -51,6 +63,10 @@ def validate_archive(data: object, filename: str | None = None) -> list[str]:
             errors.append(f"{prefix}messages[{i}] missing 'content' key")
         elif not isinstance(msg["content"], str):
             errors.append(f"{prefix}messages[{i}] 'content' must be a string, got {type(msg['content']).__name__}")
+        if "timestamp" not in msg:
+            errors.append(f"{prefix}messages[{i}] missing 'timestamp' key")
+        elif not isinstance(msg["timestamp"], str):
+            errors.append(f"{prefix}messages[{i}] 'timestamp' must be a string, got {type(msg['timestamp']).__name__}")
 
     has_non_system = any(
         isinstance(m, dict) and m.get("role") in ("user", "assistant")
@@ -62,18 +78,40 @@ def validate_archive(data: object, filename: str | None = None) -> list[str]:
     return errors
 
 
-def save(messages: list[dict], title: str | None = None) -> Path | None:
+def save(
+    messages: list[dict],
+    title: str | None = None,
+    assistant_id: str | None = None,
+    assistant_name: str | None = None,
+    model: str | None = None,
+    client_ip: str | None = None,
+    user_agent: str | None = None,
+    created_at: str | None = None,
+) -> Path | None:
     if len(messages) <= 1:
         return None
 
     archive_dir = Path(ARCHIVE_DIR).expanduser()
     archive_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    now = datetime.now(timezone.utc)
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
     suffix = f"_{_slugify(title)}" if title else ""
     path = archive_dir / f"{timestamp}{suffix}.json"
 
-    data = {"title": title, "messages": messages}
+    data: dict = {
+        "title": title,
+        "created_at": created_at or now.isoformat(),
+        "archived_at": now.isoformat(),
+        "model": model or "unknown",
+        "client_ip": client_ip,
+        "user_agent": user_agent,
+        "messages": messages,
+    }
+    if assistant_id:
+        data["assistant_id"] = assistant_id
+        data["assistant_name"] = assistant_name
+
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
@@ -105,6 +143,8 @@ def list_archives(limit: int = 50) -> list[dict]:
             "filename": f.name,
             "title": title,
             "timestamp": f.stem.split("_")[0] if "_" in f.stem else f.stem,
+            "assistant_id": data.get("assistant_id"),
+            "assistant_name": data.get("assistant_name"),
         })
     return results
 
@@ -119,18 +159,18 @@ def delete_archive(filename: str) -> bool:
     return True
 
 
-def load_archive(filename: str) -> list[dict]:
-    """Load messages from a specific archive file."""
+def load_archive(filename: str) -> dict | None:
+    """Load archive data including messages and metadata."""
     archive_dir = Path(ARCHIVE_DIR).expanduser()
     path = archive_dir / filename
     if not path.exists() or not path.is_relative_to(archive_dir):
-        return []
+        return None
     try:
         data = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
-        return []
+        return None
     errors = validate_archive(data, filename)
     if errors:
         log.warning("Invalid archive %s: %s", filename, "; ".join(errors))
-        return []
-    return data.get("messages", [])
+        return None
+    return data

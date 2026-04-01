@@ -1,8 +1,6 @@
 """Unit tests for the POST /api/sessions/resume endpoint."""
 
 import json
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -31,10 +29,15 @@ def test_archive(_tmp_archive_dir):
     """Create a well-formed archive file and return its filename."""
     data = {
         "title": "Code word test",
+        "created_at": "2026-04-01T12:00:00+00:00",
+        "archived_at": "2026-04-01T12:05:00+00:00",
+        "model": "test-model",
+        "client_ip": "127.0.0.1",
+        "user_agent": "TestAgent/1.0",
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Remember the code word is banana."},
-            {"role": "assistant", "content": "Got it, the code word is banana."},
+            {"role": "system", "content": "You are a helpful assistant.", "timestamp": "2026-04-01T12:00:00+00:00"},
+            {"role": "user", "content": "Remember the code word is banana.", "timestamp": "2026-04-01T12:00:05+00:00"},
+            {"role": "assistant", "content": "Got it, the code word is banana.", "timestamp": "2026-04-01T12:00:07+00:00"},
         ],
     }
     path = _tmp_archive_dir / "20260401_120000_code-word-test.json"
@@ -80,12 +83,12 @@ def test_resume_invalid_archive_returns_404(client):
     assert res.status_code == 404
 
 
-def test_resume_no_model_returns_422(client):
+def test_resume_no_model_returns_error(client):
     res = client.post(
         "/api/sessions/resume",
         json={"filename": "whatever.json"},
     )
-    assert res.status_code == 422
+    assert res.status_code == 404
 
 
 def test_resume_preserves_current_system_prompt(client, test_archive):
@@ -99,12 +102,10 @@ def test_resume_preserves_current_system_prompt(client, test_archive):
     from local_llm.api import sessions
     from local_llm.config import SYSTEM_PROMPT
 
-    _, history = sessions[sid]
+    history = sessions[sid].history
     messages = history.messages
-    # First message should be the current system prompt, not from archive
     assert messages[0]["role"] == "system"
     assert messages[0]["content"] == SYSTEM_PROMPT
-    # Archived system message should NOT appear
     system_msgs = [m for m in messages if m["role"] == "system"]
     assert len(system_msgs) == 1
 
@@ -120,6 +121,21 @@ def test_resume_chat_has_context(client, test_archive):
 
     from local_llm.api import sessions
 
-    _, history = sessions[sid]
+    history = sessions[sid].history
     contents = [m["content"] for m in history.messages]
     assert any("banana" in c for c in contents)
+
+
+def test_status_includes_created_at(client, test_archive):
+    """Status endpoint includes created_at and client_ip from session metadata."""
+    res = client.post(
+        "/api/sessions/resume",
+        json={"model": "test-model", "filename": test_archive},
+    )
+    sid = res.json()["session_id"]
+
+    status = client.get(f"/api/sessions/{sid}/status")
+    stats = status.json()
+    assert "created_at" in stats
+    assert stats["created_at"] != ""
+    assert "client_ip" in stats

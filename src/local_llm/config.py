@@ -39,6 +39,7 @@ MAX_INPUT_CHARS = _model.get("max_input_chars", 32000)
 
 # General config
 ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")
+ASSISTANTS_DIR = _general.get("assistants_dir", "~/.local-llm/assistants")
 
 # Obsidian config
 OBSIDIAN_ENABLED = _obsidian.get("enabled", False)
