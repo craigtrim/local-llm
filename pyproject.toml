@@ -1,12 +1,39 @@
 [project]
 name = "local-llm"
 version = "0.1.0"
-description = ""
+description = "A lightweight CLI and web interface for chatting with local Ollama models"
+license = "MIT"
 authors = [
-    {name = "Craig Trim",email = "ctrim@maryville.edu"}
+    {name = "Craig Trim", email = "ctrim@maryville.edu"},
+]
+maintainers = [
+    {name = "Craig Trim", email = "ctrim@maryville.edu"},
 ]
 readme = "README.md"
 requires-python = ">=3.11"
+keywords = [
+    "ollama",
+    "llm",
+    "chat",
+    "cli",
+    "local",
+    "conversational AI",
+    "language model",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
 dependencies = [
     "ollama>=0.4,<1.0",
     "pyyaml>=6.0,<7.0",
@@ -15,12 +42,20 @@ dependencies = [
     "uvicorn[standard]>=0.34,<1.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/craigtrim/local-llm"
+"Bug Tracker" = "https://github.com/craigtrim/local-llm/issues"
+
 [project.scripts]
 local-llm = "local_llm.cli:main"
 local-llm-web = "local_llm.api:serve"
 
 [tool.poetry]
 packages = [{include = "local_llm", from = "src"}]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+pytest-playwright = ">=0.5"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

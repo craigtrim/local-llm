@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from .config import CONTEXT_RESERVE, TOKEN_ESTIMATE_RATIO
+from .config import CONTEXT_RESERVE, TITLE_AFTER_EXCHANGES, TOKEN_ESTIMATE_RATIO
 
 
 class ConversationHistory:
@@ -9,12 +9,16 @@ class ConversationHistory:
         context_limit: int,
         summarize_fn: Callable[[list[dict]], str] | None = None,
         on_truncate: Callable[[list[dict]], None] | None = None,
+        title_fn: Callable[[list[dict]], str] | None = None,
     ) -> None:
         self._messages: list[dict] = []
         self._context_limit = context_limit
         self._summarize_fn = summarize_fn
         self._on_truncate = on_truncate
+        self._title_fn = title_fn
         self._summary_count = 0
+        self.title: str | None = None
+        self._user_renamed = False
 
     @property
     def messages(self) -> list[dict]:
@@ -22,6 +26,23 @@ class ConversationHistory:
 
     def add(self, role: str, content: str) -> None:
         self._messages.append({"role": role, "content": content})
+        if role == "assistant" and not self.title and not self._user_renamed:
+            self._maybe_generate_title()
+
+    def set_title(self, title: str) -> None:
+        self.title = title
+        self._user_renamed = True
+
+    def _maybe_generate_title(self) -> None:
+        if not self._title_fn:
+            return
+        exchange_count = sum(1 for m in self._messages if m["role"] == "user")
+        if exchange_count < TITLE_AFTER_EXCHANGES:
+            return
+        try:
+            self.title = self._title_fn(self._messages)
+        except Exception:
+            pass
 
     def get_messages(self) -> list[dict]:
         budget = self._context_limit - CONTEXT_RESERVE
@@ -75,4 +96,5 @@ class ConversationHistory:
             "pct_used": round(tokens_used / budget * 100, 1) if budget else 0,
             "qa_count": qa_count,
             "summary_count": self._summary_count,
+            "title": self.title,
         }

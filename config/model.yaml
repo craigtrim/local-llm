@@ -7,3 +7,7 @@ summarize_prompt: >-
   Summarize the following conversation in under 200 words.
   Preserve key facts, decisions, and any instructions the user gave.
   Respond with only the summary, no preamble.
+title_prompt: >-
+  Give this conversation a short title (under 8 words).
+  Respond with only the title, no quotes or punctuation.
+title_after_exchanges: 1

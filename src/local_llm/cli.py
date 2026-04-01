@@ -8,6 +8,7 @@ from .config import (
     SUMMARIZE_PROMPT,
     SUMMARY_MODEL,
     SYSTEM_PROMPT,
+    TITLE_PROMPT,
 )
 from .history import ConversationHistory
 
@@ -16,7 +17,7 @@ console = Console()
 
 def _archive(history: ConversationHistory, model: str | None = None) -> None:
     try:
-        path = archive.save(history.messages)
+        path = archive.save(history.messages, title=history.title)
         if path:
             console.print(f"[dim]Archived conversation to {path}[/]")
             if OBSIDIAN_ENABLED and OBSIDIAN_VAULT_DIR:
@@ -71,10 +72,14 @@ def new_session(model: str) -> ConversationHistory:
         except Exception as e:
             console.print(f"[dim]Archive failed: {e}[/]")
 
+    def title_fn(messages: list[dict]) -> str:
+        return client.generate_title(messages, summary_model, TITLE_PROMPT)
+
     history = ConversationHistory(
         context_limit=context_length,
         summarize_fn=summarize_fn,
         on_truncate=on_truncate,
+        title_fn=title_fn,
     )
     if SYSTEM_PROMPT:
         history.add("system", SYSTEM_PROMPT)
@@ -90,6 +95,7 @@ def main() -> None:
         return
 
     history = new_session(model)
+    prev_title: str | None = None
 
     try:
         while True:
@@ -104,6 +110,7 @@ def main() -> None:
             if stripped == "/clear":
                 _archive(history, model)
                 history = new_session(model)
+                prev_title = None
                 console.print("[dim]Conversation cleared.[/]\n")
                 continue
             if stripped == "/status":
@@ -113,7 +120,10 @@ def main() -> None:
                     f"({s['tokens_used']:,} / {s['token_budget']:,} tokens)"
                 )
                 console.print(f"[bold]Q&A exchanges:[/] {s['qa_count']}")
-                console.print(f"[bold]Summaries:[/] {s['summary_count']}\n")
+                console.print(f"[bold]Summaries:[/] {s['summary_count']}")
+                if s["title"]:
+                    console.print(f"[bold]Title:[/] {s['title']}")
+                console.print()
                 continue
             if stripped == "/model":
                 _archive(history, model)
@@ -121,6 +131,19 @@ def main() -> None:
                 if new_model:
                     model = new_model
                     history = new_session(model)
+                    prev_title = None
+                continue
+            if user_input.strip().startswith("/title"):
+                new_title = user_input.strip()[len("/title"):].strip()
+                if new_title:
+                    history.set_title(new_title)
+                    prev_title = new_title
+                    console.print(f"[dim]Chat title set: {new_title}[/]\n")
+                else:
+                    if history.title:
+                        console.print(f"[bold]Title:[/] {history.title}\n")
+                    else:
+                        console.print("[dim]No title yet. Usage: /title <name>[/]\n")
                 continue
             if not user_input.strip():
                 continue
@@ -136,6 +159,11 @@ def main() -> None:
                 continue
 
             history.add("assistant", response_text)
+
+            if history.title and history.title != prev_title:
+                console.print(f"[dim]Chat title: {history.title}[/]")
+                prev_title = history.title
+
             console.print()
             console.print(Markdown(response_text))
             console.print()

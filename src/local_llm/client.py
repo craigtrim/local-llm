@@ -34,3 +34,12 @@ def summarize(messages: list[dict], model: str, prompt: str) -> str:
         {"role": "system", "content": prompt},
         {"role": "user", "content": formatted},
     ])
+
+
+def generate_title(messages: list[dict], model: str, prompt: str) -> str:
+    formatted = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    title = chat(model, [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": formatted},
+    ])
+    return title.strip().strip("\"'.")

@@ -29,6 +29,12 @@ SUMMARIZE_PROMPT = _model.get(
     "Preserve key facts, decisions, and any instructions the user gave. "
     "Respond with only the summary, no preamble.",
 )
+TITLE_PROMPT = _model.get(
+    "title_prompt",
+    "Give this conversation a short title (under 8 words). "
+    "Respond with only the title, no quotes or punctuation.",
+)
+TITLE_AFTER_EXCHANGES = _model.get("title_after_exchanges", 1)
 
 # General config
 ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")
