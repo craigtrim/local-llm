@@ -70,12 +70,15 @@ def server_url():
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
 
-        # Wait for server to be ready
+        # Wait for server to be fully ready (not just accepting TCP)
+        import urllib.request
         for _ in range(50):
             try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                    break
-            except OSError:
+                urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/models", timeout=0.5
+                )
+                break
+            except Exception:
                 time.sleep(0.1)
 
         yield f"http://127.0.0.1:{port}"

@@ -135,6 +135,15 @@ async def get_archives() -> dict:
     return {"archives": archives}
 
 
+@app.delete("/api/archives/{filename}")
+async def delete_archive(filename: str) -> dict:
+    log.info("DELETE /api/archives/%s", filename)
+    deleted = await asyncio.to_thread(archive.delete_archive, filename)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Archive not found")
+    return {"deleted": filename}
+
+
 @app.get("/api/archives/{filename}")
 async def get_archive(filename: str) -> dict:
     log.info("GET /api/archives/%s", filename)

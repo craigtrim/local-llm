@@ -821,7 +821,8 @@ html, body {
 }
 
 .sidebar-recent-item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   background: none;
   border: none;
@@ -832,10 +833,36 @@ html, body {
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+
+.sidebar-recent-title {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.1s, color 0.1s;
+}
+
+.sidebar-recent-delete {
+  flex-shrink: 0;
+  opacity: 0;
+  color: var(--text-dim);
+  padding: 2px;
+  margin-left: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.sidebar-recent-delete:hover {
+  color: var(--error);
+}
+
+.sidebar-recent-item:hover .sidebar-recent-delete {
+  opacity: 1;
 }
 
 .sidebar-recent-item:hover {
