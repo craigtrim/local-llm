@@ -1,0 +1,23 @@
+[project]
+name = "local-llm"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Craig Trim",email = "ctrim@maryville.edu"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ollama>=0.4,<1.0",
+    "rich>=13.0,<14.0",
+]
+
+[project.scripts]
+local-llm = "local_llm.cli:main"
+
+[tool.poetry]
+packages = [{include = "local_llm", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
