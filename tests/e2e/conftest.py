@@ -28,6 +28,10 @@ class _FakeListResponse:
 
 
 def _fake_ollama_chat(model, messages, stream=False):
+    _OLLAMA_KEYS = {"role", "content", "images"}
+    for msg in messages:
+        unexpected = set(msg.keys()) - _OLLAMA_KEYS
+        assert not unexpected, f"Unexpected keys sent to Ollama: {unexpected}"
     if stream:
         def _stream():
             for word in FAKE_RESPONSE.split():
