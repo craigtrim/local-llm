@@ -7,3 +7,4 @@ dist/
 config.sh
 .claude/
 CLAUDE.md
+tests/test_repo_hygiene.py

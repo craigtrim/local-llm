@@ -30,6 +30,7 @@ class ConversationHistory:
         return list(self._messages)
 
     def add(self, role: str, content: str) -> None:
+        # Per-message timestamps for archive metadata (see #19)
         self._messages.append({
             "role": role,
             "content": content,

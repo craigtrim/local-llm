@@ -38,6 +38,7 @@ class SessionInfo(NamedTuple):
     assistant_name: str | None
     assistant_color: str | None
     history: ConversationHistory
+    # Session metadata captured from request (see #19)
     created_at: str = ""
     client_ip: str | None = None
     user_agent: str | None = None

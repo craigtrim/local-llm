@@ -232,6 +232,7 @@ html, body {
 
 /* Assistant model sub-picker (for Default assistant with no model) */
 
+/* Contained dropdown with scroll — fixes overflow (see #21) */
 .assistant-model-subpicker {
   display: flex;
   flex-direction: column;

@@ -49,6 +49,7 @@ def server_url():
     """Start the real FastAPI server with mocked ollama on a random port."""
     port = _find_free_port()
 
+    # Isolate e2e tests from real user data (see #17)
     tmp_assistants = tempfile.mkdtemp()
     tmp_archives = tempfile.mkdtemp()
 

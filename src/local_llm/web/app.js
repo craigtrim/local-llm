@@ -173,6 +173,7 @@ function renderAssistantPicker(assistants) {
   });
 }
 
+// Close all open subpickers before opening a new one (see #21)
 function closeAllSubpickers() {
   document.querySelectorAll(".assistant-model-subpicker").forEach((el) => el.remove());
 }

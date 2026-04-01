@@ -39,6 +39,7 @@ def validate_archive(data: object, filename: str | None = None) -> list[str]:
         errors.append(f"{prefix}'messages' must be a list, got {type(messages).__name__}")
         return errors
 
+    # Required metadata fields — no backward compat, old archives must be deleted (see #19)
     for key in ("created_at", "archived_at", "model"):
         if key not in data:
             errors.append(f"{prefix}missing '{key}' key")
