@@ -1,18 +1,26 @@
 from rich.console import Console
 from rich.markdown import Markdown
 
-from . import archive, client
-from .config import SUMMARIZE_PROMPT, SUMMARY_MODEL, SYSTEM_PROMPT
+from . import archive, client, obsidian
+from .config import (
+    OBSIDIAN_ENABLED,
+    OBSIDIAN_VAULT_DIR,
+    SUMMARIZE_PROMPT,
+    SUMMARY_MODEL,
+    SYSTEM_PROMPT,
+)
 from .history import ConversationHistory
 
 console = Console()
 
 
-def _archive(history: ConversationHistory) -> None:
+def _archive(history: ConversationHistory, model: str | None = None) -> None:
     try:
         path = archive.save(history.messages)
         if path:
             console.print(f"[dim]Archived conversation to {path}[/]")
+            if OBSIDIAN_ENABLED and OBSIDIAN_VAULT_DIR:
+                obsidian.convert(path, OBSIDIAN_VAULT_DIR, model)
     except Exception as e:
         console.print(f"[dim]Archive failed: {e}[/]")
 
@@ -58,6 +66,8 @@ def new_session(model: str) -> ConversationHistory:
             path = archive.save(messages)
             if path:
                 console.print(f"[dim]Archived conversation to {path}[/]")
+                if OBSIDIAN_ENABLED and OBSIDIAN_VAULT_DIR:
+                    obsidian.convert(path, OBSIDIAN_VAULT_DIR, model)
         except Exception as e:
             console.print(f"[dim]Archive failed: {e}[/]")
 
@@ -92,7 +102,7 @@ def main() -> None:
             if stripped in ("exit", "quit", "/quit", "/exit"):
                 break
             if stripped == "/clear":
-                _archive(history)
+                _archive(history, model)
                 history = new_session(model)
                 console.print("[dim]Conversation cleared.[/]\n")
                 continue
@@ -106,7 +116,7 @@ def main() -> None:
                 console.print(f"[bold]Summaries:[/] {s['summary_count']}\n")
                 continue
             if stripped == "/model":
-                _archive(history)
+                _archive(history, model)
                 new_model = select_model()
                 if new_model:
                     model = new_model
@@ -132,5 +142,5 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
 
-    _archive(history)
+    _archive(history, model)
     console.print("\n[dim]Goodbye.[/]")
