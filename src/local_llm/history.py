@@ -14,6 +14,7 @@ class ConversationHistory:
         self._context_limit = context_limit
         self._summarize_fn = summarize_fn
         self._on_truncate = on_truncate
+        self._summary_count = 0
 
     @property
     def messages(self) -> list[dict]:
@@ -46,6 +47,7 @@ class ConversationHistory:
         if evicted and self._summarize_fn:
             try:
                 summary = self._summarize_fn(evicted)
+                self._summary_count += 1
                 summary_msg = {
                     "role": "system",
                     "content": f"[Summary of earlier conversation]\n{summary}",
@@ -62,3 +64,15 @@ class ConversationHistory:
             }
 
         return system + [summary_msg] + conversation
+
+    def stats(self) -> dict:
+        tokens_used = self._estimate_tokens(self._messages)
+        budget = self._context_limit - CONTEXT_RESERVE
+        qa_count = sum(1 for m in self._messages if m["role"] == "user")
+        return {
+            "tokens_used": tokens_used,
+            "token_budget": budget,
+            "pct_used": round(tokens_used / budget * 100, 1) if budget else 0,
+            "qa_count": qa_count,
+            "summary_count": self._summary_count,
+        }

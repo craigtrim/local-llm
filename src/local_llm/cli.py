@@ -96,6 +96,15 @@ def main() -> None:
                 history = new_session(model)
                 console.print("[dim]Conversation cleared.[/]\n")
                 continue
+            if stripped == "/status":
+                s = history.stats()
+                console.print(
+                    f"[bold]Context:[/] {s['pct_used']}% used "
+                    f"({s['tokens_used']:,} / {s['token_budget']:,} tokens)"
+                )
+                console.print(f"[bold]Q&A exchanges:[/] {s['qa_count']}")
+                console.print(f"[bold]Summaries:[/] {s['summary_count']}\n")
+                continue
             if stripped == "/model":
                 _archive(history)
                 new_model = select_model()
