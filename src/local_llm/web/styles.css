@@ -683,7 +683,6 @@ html, body {
 
 #sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-actions span,
-#sidebar.collapsed .sidebar-context,
 #sidebar.collapsed .sidebar-recents,
 #sidebar.collapsed .sidebar-footer span {
   display: none;
@@ -761,47 +760,6 @@ html, body {
   flex-shrink: 0;
 }
 
-/* Sidebar context bar */
-
-.sidebar-context {
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.sidebar-context-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-}
-
-.sidebar-context-track {
-  height: 4px;
-  background: #333;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.sidebar-context-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: 2px;
-  transition: width 0.3s, background 0.3s;
-  background: #4a9f4a;
-}
-
-.sidebar-context-fill.green { background: #4a9f4a; }
-.sidebar-context-fill.amber { background: #c4a539; }
-.sidebar-context-fill.red { background: #c94040; }
-
-.sidebar-context-tokens {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-dim);
-  margin-top: 4px;
-}
 
 /* Sidebar recents */
 

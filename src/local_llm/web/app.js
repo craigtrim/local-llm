@@ -22,9 +22,6 @@ const headerTitle = document.getElementById("header-title");
 const sidebar = document.getElementById("sidebar");
 const sidebarRecentsList = document.getElementById("sidebar-recents-list");
 const sidebarModelName = document.getElementById("sidebar-model-name");
-const sidebarContextPct = document.getElementById("sidebar-context-pct");
-const sidebarContextFill = document.getElementById("sidebar-context-fill");
-const sidebarContextTokens = document.getElementById("sidebar-context-tokens");
 
 // --- Command registry ---
 
@@ -393,12 +390,6 @@ async function updateContextBar() {
     });
     document.querySelector(".context-pct").textContent = `${Math.round(pct)}%`;
 
-    // Update sidebar context
-    sidebarContextPct.textContent = `${Math.round(pct)}%`;
-    sidebarContextFill.style.width = `${pct}%`;
-    sidebarContextFill.className = "sidebar-context-fill " + color;
-    sidebarContextTokens.textContent = `${data.tokens_used.toLocaleString()} / ${data.token_budget.toLocaleString()} tokens`;
-
     if (data.max_input_chars != null) {
       maxInputChars = data.max_input_chars;
       updateInputLimit();
@@ -735,14 +726,44 @@ async function loadArchives() {
 
 async function loadConversation(filename, btnEl) {
   console.log("[sidebar] Loading conversation:", filename);
+
+  if (!currentModel) {
+    console.log("[sidebar] No model selected, showing model overlay");
+    modelOverlay.style.display = "flex";
+    return;
+  }
+
   try {
-    const res = await fetch(`/api/archives/${filename}`);
-    if (!res.ok) {
-      appendSystemMessage("Failed to load conversation.");
+    // Resume: create a new session seeded with archived messages
+    const resumeRes = await fetch("/api/sessions/resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: currentModel, filename }),
+    });
+    if (!resumeRes.ok) {
+      appendSystemMessage("Failed to resume conversation.");
       return;
     }
-    const data = await res.json();
-    const messages = data.messages || [];
+    const resumeData = await resumeRes.json();
+    console.log("[sidebar] Session resumed:", resumeData);
+
+    sessionId = resumeData.session_id;
+    connectWebSocket();
+
+    // Update header title if archive had one
+    if (resumeData.title) {
+      headerTitle.textContent = resumeData.title;
+      document.title = resumeData.title + " — local-llm";
+    }
+
+    // Fetch archived messages for display
+    const archiveRes = await fetch(`/api/archives/${filename}`);
+    if (!archiveRes.ok) {
+      appendSystemMessage("Failed to load conversation messages.");
+      return;
+    }
+    const archiveData = await archiveRes.json();
+    const messages = archiveData.messages || [];
 
     // Highlight active item
     sidebarRecentsList.querySelectorAll(".sidebar-recent-item").forEach((el) => {
@@ -750,7 +771,7 @@ async function loadConversation(filename, btnEl) {
     });
     if (btnEl) btnEl.classList.add("active");
 
-    // Display archived messages as read-only history
+    // Display archived messages
     messagesEl.innerHTML = "";
     messages.forEach((msg) => {
       if (msg.role === "system") return;
@@ -763,8 +784,9 @@ async function loadConversation(filename, btnEl) {
       chatContainer.style.display = "flex";
     }
 
-    appendSystemMessage("Viewing archived conversation. Send a message to start a new chat.");
+    updateContextBar();
     scrollToBottom();
+    userInput.focus();
   } catch (err) {
     console.error("[sidebar] Failed to load conversation:", err);
     appendSystemMessage("Failed to load conversation.");
