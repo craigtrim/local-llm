@@ -261,17 +261,9 @@ async function selectAssistant(assistantId, model) {
 }
 
 function updateAssistantUI() {
-  const banner = document.getElementById("assistant-banner");
-  const bannerName = document.getElementById("assistant-banner-name");
   const headerName = document.getElementById("header-assistant-name");
 
   if (currentAssistantName) {
-    // Colored banner strip
-    banner.style.display = "flex";
-    banner.style.backgroundColor = currentAssistantColor || "var(--accent)";
-    bannerName.textContent = currentAssistantName;
-    bannerName.style.color = "#fff";
-
     // Header dot
     headerAssistantDot.style.backgroundColor = currentAssistantColor || "var(--accent)";
     headerAssistantDot.style.display = "inline-block";
@@ -283,7 +275,6 @@ function updateAssistantUI() {
     // Input placeholder
     userInput.placeholder = `Message ${currentAssistantName}...`;
   } else {
-    banner.style.display = "none";
     headerAssistantDot.style.display = "none";
     headerName.style.display = "none";
     userInput.placeholder = "Message local-llm...";

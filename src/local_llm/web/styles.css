@@ -254,22 +254,6 @@ html, body {
   font-size: 13px;
 }
 
-/* --- Assistant banner --- */
-
-#assistant-banner {
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-#assistant-banner-name {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
 /* --- Assistant name in header --- */
 
 #header-assistant-name {
