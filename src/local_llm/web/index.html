@@ -12,12 +12,99 @@
 </head>
 <body>
   <div id="app">
-    <!-- Model selection overlay -->
-    <div id="model-overlay">
-      <div class="model-card">
-        <h2>Select a model</h2>
-        <div id="model-list"></div>
-        <p class="model-hint">Models are loaded from your local Ollama instance</p>
+    <!-- Assistant selection overlay -->
+    <div id="assistant-overlay">
+      <div class="assistant-picker">
+        <h2>Choose an Assistant</h2>
+        <div id="assistant-list"></div>
+        <button id="create-assistant-btn" class="assistant-create-card">
+          <span class="assistant-create-icon">+</span>
+          <span>Create new assistant</span>
+        </button>
+        <p class="model-hint">Assistants bundle a model with a personality</p>
+      </div>
+    </div>
+
+    <!-- Assistant wizard modal -->
+    <div id="assistant-wizard-overlay" style="display: none">
+      <div class="assistant-wizard">
+        <div class="wizard-header">
+          <h2 id="wizard-title">Create Assistant</h2>
+          <button id="wizard-close-btn" class="modal-close">&times;</button>
+        </div>
+
+        <div class="wizard-step-indicator">
+          <div class="wizard-step-dot active" data-step="1"><span>1</span></div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="2"><span>2</span></div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="3"><span>3</span></div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="4"><span>4</span></div>
+        </div>
+
+        <!-- Step 1: Identity -->
+        <div id="wizard-step-1" class="wizard-step">
+          <label class="wizard-label">Name</label>
+          <input id="wizard-name" type="text" class="wizard-input" placeholder="e.g. Code Reviewer" maxlength="60">
+          <div id="wizard-name-error" class="wizard-error"></div>
+
+          <label class="wizard-label">Description <span class="wizard-optional">(optional)</span></label>
+          <input id="wizard-description" type="text" class="wizard-input" placeholder="What does this assistant do?" maxlength="120">
+
+          <label class="wizard-label">Color</label>
+          <div id="wizard-color-swatches" class="color-swatches"></div>
+        </div>
+
+        <!-- Step 2: Model -->
+        <div id="wizard-step-2" class="wizard-step" style="display: none">
+          <label class="wizard-label">Choose a model</label>
+          <div id="wizard-model-list" class="wizard-model-grid"></div>
+          <div id="wizard-model-error" class="wizard-error"></div>
+        </div>
+
+        <!-- Step 3: Personality -->
+        <div id="wizard-step-3" class="wizard-step" style="display: none">
+          <label class="wizard-label">System prompt</label>
+          <div class="wizard-templates">
+            <button class="template-btn" data-template="general">General Assistant</button>
+            <button class="template-btn" data-template="code">Code Helper</button>
+            <button class="template-btn" data-template="writing">Writing Partner</button>
+            <button class="template-btn" data-template="blank">Blank</button>
+          </div>
+          <textarea id="wizard-system-prompt" class="wizard-textarea" placeholder="Describe how this assistant should behave..." rows="8"></textarea>
+          <div id="wizard-prompt-error" class="wizard-error"></div>
+        </div>
+
+        <!-- Step 4: Advanced -->
+        <div id="wizard-step-4" class="wizard-step" style="display: none">
+          <button id="wizard-advanced-toggle" class="advanced-toggle">
+            <svg class="advanced-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Advanced settings
+          </button>
+          <div id="wizard-advanced-content" class="advanced-content" style="display: none">
+            <p class="wizard-hint">These settings are optional. Leave blank to use defaults.</p>
+            <label class="wizard-label">Context window size <span class="wizard-optional">(tokens)</span></label>
+            <input id="wizard-context-tokens" type="number" class="wizard-input" placeholder="e.g. 4096">
+
+            <label class="wizard-label">Token estimate ratio</label>
+            <input id="wizard-token-ratio" type="number" class="wizard-input" step="0.1" placeholder="e.g. 4.0">
+
+            <label class="wizard-label">Context reserve <span class="wizard-optional">(tokens)</span></label>
+            <input id="wizard-context-reserve" type="number" class="wizard-input" placeholder="e.g. 512">
+          </div>
+        </div>
+
+        <div class="wizard-footer">
+          <button id="wizard-cancel" class="wizard-btn wizard-btn-secondary">Cancel</button>
+          <div class="wizard-footer-right">
+            <button id="wizard-back" class="wizard-btn wizard-btn-secondary" style="display: none">Back</button>
+            <button id="wizard-next" class="wizard-btn wizard-btn-primary">Next</button>
+            <button id="wizard-save" class="wizard-btn wizard-btn-primary" style="display: none">Create Assistant</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -39,11 +126,11 @@
           </svg>
           <span>New chat</span>
         </button>
-        <button id="sidebar-switch-model" title="Switch model">
+        <button id="sidebar-switch-assistant" title="Switch assistant">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M1 4l3-3 3 3M4 1v9M13 10l-3 3-3-3M10 13V4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>Switch model</span>
+          <span>Switch assistant</span>
         </button>
       </div>
 
@@ -53,13 +140,18 @@
       </div>
 
       <div class="sidebar-footer">
-        <span id="sidebar-model-name"></span>
+        <span id="sidebar-assistant-info"></span>
       </div>
     </aside>
 
     <!-- Chat view -->
     <div id="chat-container" style="display: none">
+      <div id="assistant-banner" style="display: none">
+        <span id="assistant-banner-name"></span>
+      </div>
       <header id="chat-header">
+        <span id="header-assistant-dot" class="assistant-dot" style="display: none"></span>
+        <span id="header-assistant-name" style="display: none"></span>
         <span id="header-title" title="Click to rename">local-llm</span>
         <span id="header-model"></span>
         <div id="context-bar" title="Context window usage">
@@ -68,7 +160,7 @@
         </div>
         <div id="header-actions">
           <button id="clear-btn" title="Clear conversation">/clear</button>
-          <button id="model-btn" title="Switch model">/model</button>
+          <button id="assistant-btn" title="Switch assistant">/assistant</button>
         </div>
       </header>
 

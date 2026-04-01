@@ -43,7 +43,8 @@ html, body {
 
 /* --- Overlays --- */
 
-#model-overlay,
+#assistant-overlay,
+#assistant-wizard-overlay,
 #context-overlay {
   position: fixed;
   inset: 0;
@@ -54,16 +55,20 @@ html, body {
   z-index: 100;
 }
 
-.model-card {
+/* --- Assistant picker --- */
+
+.assistant-picker {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 32px;
-  min-width: 320px;
-  max-width: 480px;
+  min-width: 360px;
+  max-width: 560px;
+  width: 90%;
+  max-height: 80vh;
 }
 
-.model-card h2 {
+.assistant-picker h2 {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 20px;
@@ -76,11 +81,549 @@ html, body {
   color: var(--text-dim);
 }
 
-#model-list {
+#assistant-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
 }
+
+.assistant-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+
+.assistant-card:hover {
+  border-color: var(--accent);
+  background: #2a2d2e;
+}
+
+.assistant-card-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.assistant-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.assistant-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.assistant-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-card-model {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  background: var(--bg-primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.assistant-card-edit {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.assistant-card:hover .assistant-card-edit {
+  opacity: 1;
+}
+
+.assistant-card-edit:hover {
+  color: var(--accent);
+  background: var(--bg-primary);
+}
+
+.assistant-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.assistant-card-delete {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.assistant-card:hover .assistant-card-delete {
+  opacity: 1;
+}
+
+.assistant-card-delete:hover {
+  color: var(--error);
+  background: var(--bg-primary);
+}
+
+.assistant-create-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.assistant-create-card:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.assistant-create-icon {
+  font-size: 20px;
+  line-height: 1;
+  width: 12px;
+  text-align: center;
+}
+
+/* Assistant model sub-picker (for Default assistant with no model) */
+
+.assistant-model-subpicker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.assistant-card:has(.assistant-model-subpicker) {
+  border-color: var(--accent);
+  flex-wrap: wrap;
+}
+
+.assistant-model-subpicker .model-option {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* --- Assistant banner --- */
+
+#assistant-banner {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#assistant-banner-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* --- Assistant name in header --- */
+
+#header-assistant-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* --- Assistant dot --- */
+
+.assistant-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.assistant-dot-sm {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+/* --- Assistant wizard --- */
+
+.assistant-wizard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  min-width: 400px;
+  max-width: 540px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.wizard-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wizard-step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 24px;
+}
+
+.wizard-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.wizard-step-dot.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.wizard-step-dot.completed {
+  border-color: #4a9f4a;
+  background: #4a9f4a;
+  color: var(--bg-primary);
+}
+
+.wizard-step-line {
+  width: 32px;
+  height: 2px;
+  background: var(--border);
+  transition: background 0.2s;
+}
+
+.wizard-step-line.completed {
+  background: #4a9f4a;
+}
+
+.wizard-step {
+  min-height: 180px;
+}
+
+.wizard-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+.wizard-label:first-child {
+  margin-top: 0;
+}
+
+.wizard-optional {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.wizard-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.wizard-input:focus {
+  border-color: var(--accent);
+}
+
+.wizard-input::placeholder {
+  color: var(--text-dim);
+}
+
+.wizard-textarea {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.wizard-textarea:focus {
+  border-color: var(--accent);
+}
+
+.wizard-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.wizard-error {
+  font-size: 12px;
+  color: var(--error);
+  margin-top: 4px;
+  min-height: 16px;
+}
+
+.wizard-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+/* Color swatches */
+
+.color-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  position: relative;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: var(--text-primary);
+}
+
+.color-swatch.selected::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+}
+
+/* Wizard model grid */
+
+.wizard-model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.wizard-model-grid .model-option {
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.wizard-model-grid .model-option.selected {
+  border-color: var(--accent);
+  background: #2a3a4a;
+}
+
+/* Template buttons */
+
+.wizard-templates {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.template-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.template-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.template-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Advanced toggle */
+
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.15s;
+}
+
+.advanced-toggle:hover {
+  color: var(--text-primary);
+}
+
+.advanced-chevron {
+  transition: transform 0.2s;
+}
+
+.advanced-toggle.open .advanced-chevron {
+  transform: rotate(90deg);
+}
+
+.advanced-content {
+  padding-top: 4px;
+}
+
+/* Wizard footer */
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.wizard-footer-right {
+  display: flex;
+  gap: 8px;
+}
+
+.wizard-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.wizard-btn-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.wizard-btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.wizard-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wizard-btn-secondary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.wizard-btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+/* Model option (reused in wizard) */
 
 .model-option {
   background: var(--bg-tertiary);
