@@ -1,0 +1,9 @@
+default_context_tokens: 4096
+token_estimate_ratio: 4.0
+context_reserve: 512
+system_prompt: "You are a helpful assistant."
+summary_model: null
+summarize_prompt: >-
+  Summarize the following conversation in under 200 words.
+  Preserve key facts, decisions, and any instructions the user gave.
+  Respond with only the summary, no preamble.

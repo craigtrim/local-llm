@@ -1,0 +1,5 @@
+enabled: false
+vault_dir: null
+tags:
+  - local-llm
+  - chat-archive

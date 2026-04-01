@@ -1,12 +1,39 @@
-DEFAULT_CONTEXT_TOKENS = 4096
-TOKEN_ESTIMATE_RATIO = 4.0
-CONTEXT_RESERVE = 512
-SYSTEM_PROMPT = "You are a helpful assistant."
+from pathlib import Path
 
-ARCHIVE_DIR = "~/.local-llm/archives"
-SUMMARY_MODEL = None  # None means use the chat model
-SUMMARIZE_PROMPT = (
+import yaml
+
+_CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
+
+
+def _load(filename: str) -> dict:
+    path = _CONFIG_DIR / filename
+    if path.exists():
+        with open(path) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+_model = _load("model.yaml")
+_general = _load("general.yaml")
+_obsidian = _load("obsidian.yaml")
+
+# Model config
+DEFAULT_CONTEXT_TOKENS = _model.get("default_context_tokens", 4096)
+TOKEN_ESTIMATE_RATIO = _model.get("token_estimate_ratio", 4.0)
+CONTEXT_RESERVE = _model.get("context_reserve", 512)
+SYSTEM_PROMPT = _model.get("system_prompt", "You are a helpful assistant.")
+SUMMARY_MODEL = _model.get("summary_model", None)
+SUMMARIZE_PROMPT = _model.get(
+    "summarize_prompt",
     "Summarize the following conversation in under 200 words. "
     "Preserve key facts, decisions, and any instructions the user gave. "
-    "Respond with only the summary, no preamble."
+    "Respond with only the summary, no preamble.",
 )
+
+# General config
+ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")
+
+# Obsidian config
+OBSIDIAN_ENABLED = _obsidian.get("enabled", False)
+OBSIDIAN_VAULT_DIR = _obsidian.get("vault_dir", None)
+OBSIDIAN_TAGS = _obsidian.get("tags", ["local-llm", "chat-archive"])
