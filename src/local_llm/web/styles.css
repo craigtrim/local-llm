@@ -503,6 +503,24 @@ html, body {
   cursor: not-allowed;
 }
 
+#stop-btn {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+#stop-btn:hover {
+  color: #ff6b6b;
+}
+
 #input-hint {
   text-align: center;
   font-size: 11px;

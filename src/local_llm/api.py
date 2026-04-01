@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import queue
+import threading
 import uuid
 from pathlib import Path
 
@@ -177,6 +178,9 @@ async def websocket_chat(ws: WebSocket, session_id: str):
     try:
         while True:
             user_text = await ws.receive_text()
+            if user_text == "__STOP__":
+                log.info("Ignoring stale stop signal")
+                continue
             log.info("WebSocket received message: %s", user_text[:100])
             model, history = sessions[session_id]
 
@@ -197,6 +201,7 @@ async def websocket_chat(ws: WebSocket, session_id: str):
 
             q: queue.Queue[str | None] = queue.Queue()
             error_holder: list[Exception] = []
+            stop_event = threading.Event()
 
             def stream_sync():
                 try:
@@ -204,6 +209,9 @@ async def websocket_chat(ws: WebSocket, session_id: str):
                     for chunk in ollama_lib.chat(
                         model=model, messages=messages, stream=True
                     ):
+                        if stop_event.is_set():
+                            log.info("Stop signal received, breaking stream")
+                            break
                         token = chunk.get("message", {}).get("content", "")
                         if token:
                             q.put(token)
@@ -219,7 +227,29 @@ async def websocket_chat(ws: WebSocket, session_id: str):
             task = loop.run_in_executor(None, stream_sync)
 
             full_response: list[str] = []
+            stopped = False
             while True:
+                # Check for stop message from client (non-blocking)
+                try:
+                    incoming = await asyncio.wait_for(
+                        ws.receive_text(), timeout=0.01
+                    )
+                    if incoming == "__STOP__":
+                        log.info("Client sent stop signal")
+                        stop_event.set()
+                        stopped = True
+                        # Drain remaining tokens until sentinel
+                        while True:
+                            try:
+                                token = q.get(timeout=0.5)
+                            except queue.Empty:
+                                continue
+                            if token is None:
+                                break
+                        break
+                except asyncio.TimeoutError:
+                    pass
+
                 try:
                     token = q.get_nowait()
                 except queue.Empty:
@@ -232,16 +262,26 @@ async def websocket_chat(ws: WebSocket, session_id: str):
 
             await task
 
-            if error_holder:
+            if error_holder and not stopped:
                 error_msg = str(error_holder[0])
                 log.error("Sending error to client: %s", error_msg)
                 await ws.send_json({"type": "error", "content": error_msg})
                 continue
 
             complete_text = "".join(full_response)
-            log.info("Response complete, length=%d chars", len(complete_text))
-            history.add("assistant", complete_text)
-            await ws.send_json({"type": "done", "content": complete_text})
+            log.info(
+                "Response %s, length=%d chars",
+                "stopped" if stopped else "complete",
+                len(complete_text),
+            )
+
+            if complete_text:
+                history.add("assistant", complete_text)
+
+            if stopped:
+                await ws.send_json({"type": "stopped", "content": complete_text})
+            else:
+                await ws.send_json({"type": "done", "content": complete_text})
 
             if history.title:
                 await ws.send_json({"type": "title", "content": history.title})

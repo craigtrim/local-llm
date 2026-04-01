@@ -15,6 +15,7 @@ const modelList = document.getElementById("model-list");
 const chatContainer = document.getElementById("chat-container");
 const headerModel = document.getElementById("header-model");
 const commandPopup = document.getElementById("command-popup");
+const stopBtn = document.getElementById("stop-btn");
 const contextBar = document.getElementById("context-bar");
 const headerTitle = document.getElementById("header-title");
 
@@ -102,6 +103,13 @@ async function selectModel(model) {
   }
 }
 
+// --- Streaming UI toggle ---
+
+function setStreamingUI(streaming) {
+  sendBtn.style.display = streaming ? "none" : "flex";
+  stopBtn.style.display = streaming ? "flex" : "none";
+}
+
 // --- WebSocket ---
 
 function connectWebSocket() {
@@ -128,6 +136,9 @@ function connectWebSocket() {
     } else if (msg.type === "done") {
       console.log("[ws] Stream complete, total length:", msg.content.length);
       finishStreaming(msg.content);
+    } else if (msg.type === "stopped") {
+      console.log("[ws] Stream stopped by user, partial length:", msg.content.length);
+      finishStreaming(msg.content || null);
     } else if (msg.type === "title") {
       console.log("[ws] Title received:", msg.content);
       headerTitle.textContent = msg.content;
@@ -174,6 +185,7 @@ function sendMessage() {
   resetTextarea();
 
   isStreaming = true;
+  setStreamingUI(true);
   streamBuffer = "";
   activeAssistantEl = appendMessage("assistant", "");
   activeAssistantEl
@@ -198,14 +210,18 @@ function finishStreaming(finalContent) {
   if (activeAssistantEl) {
     const contentEl = activeAssistantEl.querySelector(".message-content");
     contentEl.classList.remove("streaming-cursor");
-    if (finalContent !== null) {
+    if (finalContent) {
       contentEl.innerHTML = renderMarkdown(finalContent);
       contentEl.querySelectorAll("pre code").forEach((el) => {
         hljs.highlightElement(el);
       });
+    } else if (finalContent === null || finalContent === "") {
+      // Remove empty assistant bubble (e.g. stopped before any tokens)
+      activeAssistantEl.remove();
     }
   }
   isStreaming = false;
+  setStreamingUI(false);
   streamBuffer = "";
   activeAssistantEl = null;
   scrollToBottom();
@@ -491,6 +507,11 @@ userInput.addEventListener("keydown", (e) => {
       return;
     }
   } else {
+    if (e.key === "Escape" && isStreaming) {
+      e.preventDefault();
+      stopBtn.click();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -514,6 +535,12 @@ userInput.addEventListener("input", () => {
 });
 
 sendBtn.addEventListener("click", sendMessage);
+
+stopBtn.addEventListener("click", () => {
+  if (!isStreaming || !ws) return;
+  console.log("[stop] Sending stop signal");
+  ws.send("__STOP__");
+});
 
 function resetTextarea() {
   userInput.style.height = "auto";
