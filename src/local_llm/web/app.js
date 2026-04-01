@@ -305,25 +305,37 @@ async function handleStatus() {
   console.log("[status] Fetching status for session:", sessionId);
   try {
     const res = await fetch(`/api/sessions/${sessionId}/status`);
-    console.log("[status] Response status:", res.status);
     const data = await res.json();
+    const pct = Math.min(100, data.pct_used);
     console.log("[status] Data:", data);
-    const html = `<div class="status-grid">
-      <span class="status-label">Context:</span>
-      <span class="status-value">${data.pct_used}% used (${data.tokens_used.toLocaleString()} / ${data.token_budget.toLocaleString()} tokens)</span>
-      <span class="status-label">Q&A:</span>
-      <span class="status-value">${data.qa_count} exchanges</span>
-      <span class="status-label">Summaries:</span>
-      <span class="status-value">${data.summary_count}</span>
-      <span class="status-label">Model:</span>
-      <span class="status-value">${data.model}</span>
-    </div>`;
-    appendSystemMessage(html, true);
+
+    document.getElementById("context-modal-body").innerHTML = `
+      <div class="status-grid">
+        <span class="status-label">Context:</span>
+        <span class="status-value">${pct}% used (${data.tokens_used.toLocaleString()} / ${data.token_budget.toLocaleString()} tokens)</span>
+        <span class="status-label">Q&A:</span>
+        <span class="status-value">${data.qa_count} exchanges</span>
+        <span class="status-label">Summaries:</span>
+        <span class="status-value">${data.summary_count}</span>
+        <span class="status-label">Model:</span>
+        <span class="status-value">${data.model}</span>
+      </div>`;
+
+    const overlay = document.getElementById("context-overlay");
+    const modal = overlay.querySelector(".context-modal");
+    modal.classList.remove("clearing");
+    document.getElementById("context-clear-btn").textContent = "Clear Context";
+    document.getElementById("context-close-btn").style.display = "";
+    overlay.style.display = "flex";
     updateContextBar();
   } catch (err) {
     console.error("[status] Failed:", err);
     appendSystemMessage("Failed to fetch status.");
   }
+}
+
+function closeContextModal() {
+  document.getElementById("context-overlay").style.display = "none";
 }
 
 // --- Context bar ---
@@ -356,6 +368,9 @@ async function updateContextBar() {
       maxInputChars = data.max_input_chars;
       updateInputLimit();
     }
+    const empty = data.qa_count === 0;
+    document.getElementById("clear-btn").disabled = empty;
+    document.getElementById("context-clear-btn").disabled = empty;
     console.log("[contextBar] Updated: pct=%s filled=%d color=%s maxInput=%d", pct, filled, color, maxInputChars);
   } catch (err) {
     console.error("[contextBar] Failed to update:", err);
@@ -561,4 +576,42 @@ headerTitle.addEventListener("click", () => {
     if (e.key === "Enter") { e.preventDefault(); input.blur(); }
     if (e.key === "Escape") { input.value = current; input.blur(); }
   });
+});
+
+// --- Context modal ---
+
+document.getElementById("context-close-btn").addEventListener("click", closeContextModal);
+
+document.getElementById("context-overlay").addEventListener("click", (e) => {
+  const modal = document.querySelector(".context-modal");
+  if (!modal.classList.contains("clearing") && !modal.contains(e.target)) {
+    closeContextModal();
+  }
+});
+
+document.getElementById("context-clear-btn").addEventListener("click", async () => {
+  const modal = document.querySelector(".context-modal");
+  const btn = document.getElementById("context-clear-btn");
+  modal.classList.add("clearing");
+  document.getElementById("context-close-btn").style.display = "none";
+  btn.textContent = "Clearing...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/sessions/${sessionId}/clear`, { method: "POST" });
+    const data = await res.json();
+    sessionId = data.session_id;
+    messagesEl.innerHTML = "";
+    headerTitle.textContent = "local-llm";
+    document.title = "local-llm";
+    connectWebSocket();
+    updateContextBar();
+  } catch (err) {
+    console.error("[context-clear] Failed:", err);
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Clear Context";
+  modal.classList.remove("clearing");
+  closeContextModal();
 });

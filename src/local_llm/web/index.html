@@ -21,6 +21,53 @@
       </div>
     </div>
 
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <button id="sidebar-toggle" title="Toggle sidebar">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 3h12M2 8h12M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <span class="sidebar-title">local-llm</span>
+      </div>
+
+      <div class="sidebar-actions">
+        <button id="sidebar-new-chat" title="New chat">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>New chat</span>
+        </button>
+        <button id="sidebar-switch-model" title="Switch model">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 4l3-3 3 3M4 1v9M13 10l-3 3-3-3M10 13V4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Switch model</span>
+        </button>
+      </div>
+
+      <div class="sidebar-context">
+        <div class="sidebar-context-label">
+          <span>Context</span>
+          <span id="sidebar-context-pct">0%</span>
+        </div>
+        <div class="sidebar-context-track">
+          <div id="sidebar-context-fill" class="sidebar-context-fill"></div>
+        </div>
+        <div id="sidebar-context-tokens" class="sidebar-context-tokens"></div>
+      </div>
+
+      <div class="sidebar-recents">
+        <div class="sidebar-section-label">Recents</div>
+        <div id="sidebar-recents-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <span id="sidebar-model-name"></span>
+      </div>
+    </aside>
+
     <!-- Chat view -->
     <div id="chat-container" style="display: none">
       <header id="chat-header">
@@ -52,6 +99,28 @@
           </button>
         </div>
         <div id="input-hint">Enter to send, Shift+Enter for newline</div>
+      </div>
+    </div>
+    <!-- Context status modal -->
+    <div id="context-overlay" style="display: none">
+      <div class="context-modal">
+        <div class="context-modal-header">
+          <h2>Context Window</h2>
+          <button id="context-close-btn" class="modal-close">&times;</button>
+        </div>
+        <div id="context-modal-body"></div>
+        <div class="context-modal-footer">
+          <button id="context-clear-btn" class="clear-btn">Clear Context</button>
+          <span class="context-info-trigger">
+            ?
+            <span class="context-info-tooltip">
+              Language models can only process a limited amount of text at once
+              (the "context window"). As your conversation grows, older messages
+              are summarized to make room. Clearing the context starts a fresh
+              conversation, which can improve response quality.
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   </div>

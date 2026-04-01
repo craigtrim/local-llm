@@ -126,6 +126,23 @@ async def rename_title(session_id: str, body: RenameTitleRequest) -> dict:
     return {"title": history.title}
 
 
+@app.get("/api/archives")
+async def get_archives() -> dict:
+    log.info("GET /api/archives")
+    archives = await asyncio.to_thread(archive.list_archives)
+    log.info("Archives found: %d", len(archives))
+    return {"archives": archives}
+
+
+@app.get("/api/archives/{filename}")
+async def get_archive(filename: str) -> dict:
+    log.info("GET /api/archives/%s", filename)
+    messages = await asyncio.to_thread(archive.load_archive, filename)
+    if not messages:
+        raise HTTPException(status_code=404, detail="Archive not found")
+    return {"messages": messages}
+
+
 class ChangeModelRequest(BaseModel):
     model: str
 
