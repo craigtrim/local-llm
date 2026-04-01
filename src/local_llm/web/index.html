@@ -150,8 +150,10 @@
     <!-- Chat view -->
     <div id="chat-container" style="display: none">
       <header id="chat-header">
-        <span id="header-assistant-dot" class="assistant-dot" style="display: none"></span>
-        <span id="header-assistant-name" style="display: none"></span>
+        <span id="header-assistant-group" style="display: none" title="Switch assistant">
+          <span id="header-assistant-dot" class="assistant-dot"></span>
+          <span id="header-assistant-name"></span>
+        </span>
         <span id="header-title" title="Click to rename">local-llm</span>
         <span id="header-model"></span>
         <div id="context-bar" title="Context window usage">
@@ -160,7 +162,6 @@
         </div>
         <div id="header-actions">
           <button id="clear-btn" title="Clear conversation">/clear</button>
-          <button id="assistant-btn" title="Switch assistant">/assistant</button>
         </div>
       </header>
 

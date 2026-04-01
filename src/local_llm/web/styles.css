@@ -266,13 +266,32 @@ html, body {
   font-size: 13px;
 }
 
-/* --- Assistant name in header --- */
+/* --- Assistant name in header (clickable group) --- */
+
+#header-assistant-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+#header-assistant-group:hover {
+  background: var(--bg-tertiary);
+}
+
+#header-assistant-group:hover #header-assistant-name {
+  color: var(--accent);
+}
 
 #header-assistant-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
+  transition: color 0.15s;
 }
 
 /* --- Assistant dot --- */

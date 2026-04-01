@@ -5,6 +5,7 @@ let currentAssistantId = null;
 let currentAssistantName = null;
 let currentAssistantColor = null;
 let isStreaming = false;
+let isSelectingAssistant = false;
 let streamBuffer = "";
 let activeAssistantEl = null;
 let commandHighlightIndex = 0;
@@ -229,6 +230,8 @@ async function toggleModelSubpicker(card, ast) {
 // --- Assistant selection ---
 
 async function selectAssistant(assistantId, model) {
+  if (isSelectingAssistant) return;
+  isSelectingAssistant = true;
   console.log("[selectAssistant] id:", assistantId, "model:", model);
   try {
     const res = await fetch("/api/sessions", {
@@ -258,26 +261,25 @@ async function selectAssistant(assistantId, model) {
   } catch (err) {
     console.error("[selectAssistant] Failed:", err);
     appendSystemMessage("Failed to create session.");
+  } finally {
+    isSelectingAssistant = false;
   }
 }
 
 function updateAssistantUI() {
+  const group = document.getElementById("header-assistant-group");
   const headerName = document.getElementById("header-assistant-name");
 
   if (currentAssistantName) {
-    // Header dot
+    // Header group (dot + name, clickable)
     headerAssistantDot.style.backgroundColor = currentAssistantColor || "var(--accent)";
-    headerAssistantDot.style.display = "inline-block";
-
-    // Header name label
     headerName.textContent = currentAssistantName;
-    headerName.style.display = "inline";
+    group.style.display = "inline-flex";
 
     // Input placeholder
     userInput.placeholder = `Message ${currentAssistantName}...`;
   } else {
-    headerAssistantDot.style.display = "none";
-    headerName.style.display = "none";
+    group.style.display = "none";
     userInput.placeholder = "Message local-llm...";
   }
 
@@ -784,7 +786,7 @@ function updateInputLimit() {
 
 contextBar.addEventListener("click", handleStatus);
 document.getElementById("clear-btn").addEventListener("click", handleClear);
-document.getElementById("assistant-btn").addEventListener("click", handleAssistantSwitch);
+document.getElementById("header-assistant-group").addEventListener("click", handleAssistantSwitch);
 
 // --- Editable title ---
 

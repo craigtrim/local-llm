@@ -28,10 +28,10 @@ def test_clear_resets_conversation(chat_ready):
 
 
 def test_assistant_switch_shows_overlay(chat_ready):
-    """The /assistant header button shows the assistant selection overlay."""
+    """Clicking the assistant name in the header shows the assistant selection overlay."""
     page = chat_ready
 
-    page.click("#assistant-btn")
+    page.click("#header-assistant-group")
 
     page.wait_for_selector("#assistant-overlay", state="visible", timeout=3000)
     assert not page.locator("#chat-container").is_visible()
