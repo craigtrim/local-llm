@@ -63,6 +63,9 @@ def test_wizard_escape(chat_ready):
     page.keyboard.press("Escape")
     page.wait_for_selector("#assistant-wizard-overlay", state="hidden", timeout=2000)
 
+    # Picker should still be visible (Escape only closes topmost modal — see #31)
+    assert page.locator("#assistant-overlay").is_visible()
+
 
 def test_wizard_backdrop(chat_ready):
     """Wizard closes via backdrop click."""
@@ -109,5 +112,33 @@ def test_picker_backdrop(chat_ready):
     page.wait_for_selector("#assistant-overlay", state="visible")
 
     page.locator("#assistant-overlay").click(position={"x": 10, "y": 10})
+    page.wait_for_selector("#assistant-overlay", state="hidden", timeout=2000)
+    page.wait_for_selector("#chat-container", state="visible")
+
+
+# --- Regression: cascading dismiss (see #31) ---
+
+
+def test_escape_only_closes_topmost_modal(chat_ready):
+    """Pressing Escape with wizard open over picker closes only the wizard, not the picker."""
+    page = chat_ready
+
+    # Open picker, then wizard on top
+    page.click("#sidebar-switch-assistant")
+    page.wait_for_selector("#assistant-overlay", state="visible")
+    page.click("#create-assistant-btn")
+    page.wait_for_selector("#assistant-wizard-overlay", state="visible")
+
+    # Both overlays visible
+    assert page.locator("#assistant-overlay").is_visible()
+    assert page.locator("#assistant-wizard-overlay").is_visible()
+
+    # First Escape: wizard closes, picker stays
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#assistant-wizard-overlay", state="hidden", timeout=2000)
+    assert page.locator("#assistant-overlay").is_visible()
+
+    # Second Escape: picker closes, back to chat
+    page.keyboard.press("Escape")
     page.wait_for_selector("#assistant-overlay", state="hidden", timeout=2000)
     page.wait_for_selector("#chat-container", state="visible")
