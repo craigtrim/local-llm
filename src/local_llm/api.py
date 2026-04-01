@@ -153,6 +153,39 @@ async def get_archive(filename: str) -> dict:
     return {"messages": messages}
 
 
+class ResumeSessionRequest(BaseModel):
+    model: str
+    filename: str
+
+
+@app.post("/api/sessions/resume")
+async def resume_session(body: ResumeSessionRequest) -> dict:
+    log.info("POST /api/sessions/resume model=%s filename=%s", body.model, body.filename)
+    messages = await asyncio.to_thread(archive.load_archive, body.filename)
+    if not messages:
+        raise HTTPException(status_code=404, detail="Archive not found or invalid")
+
+    sid, history = await asyncio.to_thread(_create_session, body.model)
+
+    restored = 0
+    for msg in messages:
+        if msg["role"] == "system":
+            continue
+        history.add(msg["role"], msg["content"])
+        restored += 1
+
+    sessions[sid] = (body.model, history)
+    ctx = await asyncio.to_thread(client.get_context_length, body.model)
+    log.info("Session resumed: %s with %d messages restored", sid, restored)
+    return {
+        "session_id": sid,
+        "model": body.model,
+        "context_length": ctx,
+        "messages_restored": restored,
+        "title": history.title,
+    }
+
+
 class ChangeModelRequest(BaseModel):
     model: str
 

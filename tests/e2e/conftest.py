@@ -87,6 +87,21 @@ def server_url():
         thread.join(timeout=3)
 
 
+@pytest.fixture(scope="session")
+def test_archive(server_url):
+    """Create a test archive file for resume tests."""
+    from local_llm.archive import save
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Remember the code word is banana."},
+        {"role": "assistant", "content": "Got it, the code word is banana."},
+    ]
+    path = save(messages, title="Code word test")
+    yield path.name
+    path.unlink(missing_ok=True)
+
+
 @pytest.fixture()
 def chat_page(page, server_url):
     """Navigate to the app and return the page."""
