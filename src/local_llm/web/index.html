@@ -89,15 +89,25 @@
             Advanced settings
           </button>
           <div id="wizard-advanced-content" class="advanced-content" style="display: none">
-            <p class="wizard-hint">These settings are optional. Leave blank to use defaults.</p>
+            <p class="wizard-hint">These settings are optional. Defaults are pre-selected.</p>
+
             <label class="wizard-label">Context window size <span class="wizard-optional">(tokens)</span></label>
-            <input id="wizard-context-tokens" type="number" class="wizard-input" placeholder="e.g. 4096">
+            <div class="slider-row">
+              <input id="wizard-context-tokens" type="range" class="wizard-slider" min="1024" max="131072" step="1024" value="4096">
+              <span id="wizard-context-tokens-val" class="slider-value">4096</span>
+            </div>
 
             <label class="wizard-label">Token estimate ratio</label>
-            <input id="wizard-token-ratio" type="number" class="wizard-input" step="0.1" placeholder="e.g. 4.0">
+            <div class="slider-row">
+              <input id="wizard-token-ratio" type="range" class="wizard-slider" min="1.0" max="8.0" step="0.1" value="4.0">
+              <span id="wizard-token-ratio-val" class="slider-value">4.0</span>
+            </div>
 
             <label class="wizard-label">Context reserve <span class="wizard-optional">(tokens)</span></label>
-            <input id="wizard-context-reserve" type="number" class="wizard-input" placeholder="e.g. 512">
+            <div class="slider-row">
+              <input id="wizard-context-reserve" type="range" class="wizard-slider" min="64" max="4096" step="64" value="512">
+              <span id="wizard-context-reserve-val" class="slider-value">512</span>
+            </div>
           </div>
         </div>
 
