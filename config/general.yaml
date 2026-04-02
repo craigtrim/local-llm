@@ -1,1 +1,2 @@
-archive_dir: "~/.local-llm/archives"
+archive_dir: ".user/archives"
+assistants_dir: ".user/assistants"

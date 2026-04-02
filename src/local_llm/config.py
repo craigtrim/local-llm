@@ -1,8 +1,18 @@
+import os
 from pathlib import Path
 
 import yaml
 
-_CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_CONFIG_DIR = _PROJECT_ROOT / "config"
+
+
+def _resolve_dir(raw: str) -> str:
+    """Resolve a directory path. Expands ~ or resolves relative to project root."""
+    p = Path(raw)
+    if raw.startswith("~"):
+        return str(p.expanduser())
+    return str(_PROJECT_ROOT / p)
 
 
 def _load(filename: str) -> dict:
@@ -46,9 +56,9 @@ GREETING_PROMPT = _model.get(
 )
 GREETING_COUNT = _model.get("greeting_count", 20)
 
-# General config
-ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")
-ASSISTANTS_DIR = _general.get("assistants_dir", "~/.local-llm/assistants")
+# General config (env vars override YAML for test isolation)
+ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR") or _resolve_dir(_general.get("archive_dir", ".user/archives"))
+ASSISTANTS_DIR = os.environ.get("ASSISTANTS_DIR") or _resolve_dir(_general.get("assistants_dir", ".user/assistants"))
 
 # Obsidian config
 OBSIDIAN_ENABLED = _obsidian.get("enabled", False)
