@@ -1,6 +1,11 @@
+import json
+import logging
+
 import ollama
 
-from .config import DEFAULT_CONTEXT_TOKENS
+from .config import DEFAULT_CONTEXT_TOKENS, GREETING_COUNT, GREETING_PROMPT
+
+log = logging.getLogger("local_llm.client")
 
 
 def list_models() -> list[str]:
@@ -43,3 +48,26 @@ def generate_title(messages: list[dict], model: str, prompt: str) -> str:
         {"role": "user", "content": formatted},
     ])
     return title.strip().strip("\"'.")
+
+
+def generate_greetings(name: str, system_prompt: str, model: str, count: int | None = None) -> list[str]:
+    """Generate greeting variations for an assistant using an LLM."""
+    count = count or GREETING_COUNT
+    prompt = GREETING_PROMPT.format(name=name, system_prompt=system_prompt, count=count)
+    try:
+        raw = chat(model, [{"role": "user", "content": prompt}])
+        # Parse the JSON array from the response
+        # Strip markdown fences if present
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            text = text.rsplit("```", 1)[0]
+        greetings = json.loads(text)
+        if isinstance(greetings, list) and all(isinstance(g, str) for g in greetings):
+            # Filter empty strings
+            greetings = [g.strip() for g in greetings if g.strip()]
+            log.info("Generated %d greetings for %s", len(greetings), name)
+            return greetings[:count]
+    except Exception as e:
+        log.warning("Failed to generate greetings for %s: %s", name, e)
+    return []

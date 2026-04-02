@@ -164,6 +164,22 @@ def delete_archive(filename: str) -> bool:
     return True
 
 
+def rename_archive(filename: str, title: str) -> bool:
+    """Rename an archive's title in-place. Returns True if successful."""
+    archive_dir = Path(ARCHIVE_DIR).expanduser()
+    path = archive_dir / filename
+    if not path.exists() or not path.is_relative_to(archive_dir):
+        return False
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    data["title"] = title
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+    return True
+
+
 def load_archive(filename: str) -> dict | None:
     """Load archive data including messages and metadata."""
     archive_dir = Path(ARCHIVE_DIR).expanduser()

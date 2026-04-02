@@ -7,6 +7,9 @@ from pathlib import Path
 
 from .config import ASSISTANTS_DIR, SYSTEM_PROMPT
 
+# Fields that affect greeting content; changes trigger regeneration
+_GREETING_TRIGGER_FIELDS = {"name", "model", "system_prompt"}
+
 log = logging.getLogger("local_llm.assistants")
 
 _REQUIRED_FIELDS = {"name", "model", "system_prompt"}
@@ -169,7 +172,19 @@ def get_assistant_by_uuid(target_uuid: str) -> dict | None:
     return None
 
 
-def save_assistant(config: dict) -> dict:
+def _needs_greeting_regen(existing: dict | None, config: dict) -> bool:
+    """Check if greeting-triggering fields changed."""
+    if not existing:
+        return True  # New assistant, always generate
+    if not existing.get("greetings"):
+        return True  # No greetings yet
+    for field in _GREETING_TRIGGER_FIELDS:
+        if existing.get(field) != config.get(field):
+            return True
+    return False
+
+
+def save_assistant(config: dict, generate_greetings_fn=None) -> dict:
     if "id" not in config or not config["id"]:
         config["id"] = _slugify(config.get("name", "unnamed"))
 
@@ -194,6 +209,23 @@ def save_assistant(config: dict) -> dict:
         config.setdefault("version", 1)
         config.setdefault("created_at", datetime.now(timezone.utc).isoformat())
 
+    # Handle greetings: regenerate if trigger fields changed, otherwise preserve
+    if _needs_greeting_regen(existing, config):
+        if generate_greetings_fn and config.get("model"):
+            try:
+                config["greetings"] = generate_greetings_fn(
+                    config.get("name", "Assistant"),
+                    config.get("system_prompt", ""),
+                    config.get("model"),
+                )
+            except Exception as e:
+                log.warning("Greeting generation failed: %s", e)
+                config.setdefault("greetings", [])
+        else:
+            config.setdefault("greetings", [])
+    else:
+        config["greetings"] = existing.get("greetings", [])
+
     errors = validate_assistant(config)
     if errors:
         raise ValueError("; ".join(errors))
@@ -209,8 +241,9 @@ def save_assistant(config: dict) -> dict:
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
 
-    log.info("Saved assistant: %s (%s) uuid=%s v%d",
-             config["id"], config.get("name"), config.get("uuid"), config.get("version", 1))
+    log.info("Saved assistant: %s (%s) uuid=%s v%d greetings=%d",
+             config["id"], config.get("name"), config.get("uuid"),
+             config.get("version", 1), len(config.get("greetings", [])))
     return config
 
 

@@ -36,6 +36,15 @@ TITLE_PROMPT = _model.get(
 )
 TITLE_AFTER_EXCHANGES = _model.get("title_after_exchanges", 1)
 MAX_INPUT_CHARS = _model.get("max_input_chars", 32000)
+GREETING_PROMPT = _model.get(
+    "greeting_prompt",
+    'You are an assistant named "{name}". Your role is described by this system prompt:\n'
+    "{system_prompt}\n"
+    "Generate exactly {count} short, unique greeting messages (1-2 sentences each) that you would "
+    "use to welcome a user at the start of a new conversation. Each greeting should reflect your "
+    "personality and capabilities. Respond with ONLY a JSON array of strings, no other text.",
+)
+GREETING_COUNT = _model.get("greeting_count", 20)
 
 # General config
 ARCHIVE_DIR = _general.get("archive_dir", "~/.local-llm/archives")

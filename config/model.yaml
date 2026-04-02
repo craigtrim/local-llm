@@ -12,3 +12,10 @@ title_prompt: >-
   Respond with only the title, no quotes or punctuation.
 title_after_exchanges: 1
 max_input_chars: 32000
+greeting_prompt: >-
+  You are an assistant named "{name}". Your role is described by this system prompt:
+  {system_prompt}
+  Generate exactly {count} short, unique greeting messages (1-2 sentences each) that you would
+  use to welcome a user at the start of a new conversation. Each greeting should reflect your
+  personality and capabilities. Respond with ONLY a JSON array of strings, no other text.
+greeting_count: 20

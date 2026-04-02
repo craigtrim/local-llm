@@ -9,6 +9,7 @@ import uvicorn
 
 FAKE_MODELS = ["test-model-13b", "test-model-7b"]  # sorted order (client.list_models sorts)
 FAKE_RESPONSE = "Hello! I am a test assistant ready to help you."
+FAKE_GREETINGS = [f"Greeting {i}!" for i in range(20)]
 
 
 def _find_free_port() -> int:
@@ -28,10 +29,15 @@ class _FakeListResponse:
 
 
 def _fake_ollama_chat(model, messages, stream=False):
+    import json as _json
     _OLLAMA_KEYS = {"role", "content", "images"}
     for msg in messages:
         unexpected = set(msg.keys()) - _OLLAMA_KEYS
         assert not unexpected, f"Unexpected keys sent to Ollama: {unexpected}"
+    # Detect greeting generation prompt
+    user_text = messages[-1].get("content", "") if messages else ""
+    if "unique greeting messages" in user_text and "JSON array" in user_text:
+        return {"message": {"content": _json.dumps(FAKE_GREETINGS)}}
     if stream:
         def _stream():
             for word in FAKE_RESPONSE.split():
@@ -53,9 +59,24 @@ def server_url():
     """Start the real FastAPI server with mocked ollama on a random port."""
     port = _find_free_port()
 
+    import json as _json
+
     # Isolate e2e tests from real user data (see #17)
     tmp_assistants = tempfile.mkdtemp()
     tmp_archives = tempfile.mkdtemp()
+
+    # Pre-populate default assistant with greetings so greeting tests work
+    default_assistant = {
+        "id": "default", "uuid": "00000000000000000000000000000000",
+        "name": "Default", "description": "General-purpose assistant",
+        "avatar_color": "#6b9fdb", "model": None,
+        "system_prompt": "You are a helpful assistant.",
+        "context_tokens": None, "token_estimate_ratio": None,
+        "context_reserve": None, "version": 1,
+        "greetings": FAKE_GREETINGS,
+    }
+    with open(f"{tmp_assistants}/default.json", "w") as f:
+        _json.dump(default_assistant, f)
 
     with (
         patch("ollama.chat", side_effect=_fake_ollama_chat),

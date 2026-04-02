@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -137,7 +138,10 @@ async def create_assistant(body: SaveAssistantRequest) -> dict:
     log.info("POST /api/assistants name=%s", body.name)
     config = body.model_dump(exclude_none=True)
     try:
-        saved = await asyncio.to_thread(assistants.save_assistant, config)
+        saved = await asyncio.to_thread(
+            assistants.save_assistant, config,
+            generate_greetings_fn=client.generate_greetings,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return saved
@@ -152,7 +156,10 @@ async def update_assistant(assistant_id: str, body: SaveAssistantRequest) -> dic
     config = body.model_dump(exclude_none=True)
     config["id"] = assistant_id
     try:
-        saved = await asyncio.to_thread(assistants.save_assistant, config)
+        saved = await asyncio.to_thread(
+            assistants.save_assistant, config,
+            generate_greetings_fn=client.generate_greetings,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return saved
@@ -220,6 +227,11 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
         user_agent=user_agent,
     )
     ctx = await asyncio.to_thread(client.get_context_length, model)
+    greeting = None
+    if assistant_config:
+        greetings = assistant_config.get("greetings", [])
+        if greetings:
+            greeting = random.choice(greetings)
     return {
         "session_id": sid,
         "model": model,
@@ -228,6 +240,7 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
         "assistant_name": assistant_name,
         "assistant_color": assistant_color,
         "assistant_uuid": a_uuid,
+        "greeting": greeting,
     }
 
 
@@ -279,8 +292,13 @@ async def clear_session(session_id: str) -> dict:
         client_ip=info.client_ip,
         user_agent=info.user_agent,
     )
+    greeting = None
+    if assistant_config:
+        greetings = assistant_config.get("greetings", [])
+        if greetings:
+            greeting = random.choice(greetings)
     log.info("Session cleared, new session: %s", new_sid)
-    return {"session_id": new_sid, "model": info.model}
+    return {"session_id": new_sid, "model": info.model, "greeting": greeting}
 
 
 class RenameTitleRequest(BaseModel):
@@ -310,6 +328,20 @@ async def delete_archive(filename: str) -> dict:
     if not deleted:
         raise HTTPException(status_code=404, detail="Archive not found")
     return {"deleted": filename}
+
+
+class RenameArchiveRequest(BaseModel):
+    title: str
+
+
+@app.patch("/api/archives/{filename}")
+async def rename_archive(filename: str, body: RenameArchiveRequest) -> dict:
+    """Rename an archived conversation's title (#41)."""
+    log.info("PATCH /api/archives/%s -> %s", filename, body.title)
+    renamed = await asyncio.to_thread(archive.rename_archive, filename, body.title)
+    if not renamed:
+        raise HTTPException(status_code=404, detail="Archive not found")
+    return {"filename": filename, "title": body.title}
 
 
 @app.get("/api/archives/{filename}")
