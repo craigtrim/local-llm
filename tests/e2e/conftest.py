@@ -157,3 +157,64 @@ def chat_ready(chat_page):
     # Wait for WebSocket to connect
     chat_page.wait_for_timeout(500)
     return chat_page
+
+
+# --- Real Ollama fixtures (no mocks) ---
+
+REAL_MODEL = "qwen2.5:7b"
+
+try:
+    import ollama as _ollama_check
+    _ollama_check.show(REAL_MODEL)
+    _REAL_OLLAMA_AVAILABLE = True
+except Exception:
+    _REAL_OLLAMA_AVAILABLE = False
+
+
+@pytest.fixture(scope="session")
+def real_server_url():
+    """Start the real FastAPI server with real Ollama (no mocks).
+
+    Session-scoped so all real-Ollama test files share one server.
+    Skipped when Ollama is not running.
+    """
+    if not _REAL_OLLAMA_AVAILABLE:
+        pytest.skip(f"Ollama not running or {REAL_MODEL} not available")
+
+    port = _find_free_port()
+    _tmp_assistants = tempfile.mkdtemp()
+    _tmp_archives = tempfile.mkdtemp()
+
+    with (
+        patch("local_llm.assistants.ASSISTANTS_DIR", _tmp_assistants),
+        patch("local_llm.archive.ARCHIVE_DIR", _tmp_archives),
+    ):
+        from local_llm.api import app as _app
+        from local_llm.api import sessions as _sessions
+        _sessions.clear()
+
+        _server = uvicorn.Server(
+            uvicorn.Config(
+                app=_app,
+                host="127.0.0.1",
+                port=port,
+                log_level="warning",
+            )
+        )
+        _thread = threading.Thread(target=_server.run, daemon=True)
+        _thread.start()
+
+        import urllib.request
+        for _ in range(50):
+            try:
+                urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/models", timeout=0.5
+                )
+                break
+            except Exception:
+                time.sleep(0.1)
+
+        yield f"http://127.0.0.1:{port}"
+
+        _server.should_exit = True
+        _thread.join(timeout=3)
