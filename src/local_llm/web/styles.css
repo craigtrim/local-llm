@@ -1036,6 +1036,20 @@ html, body {
   font-weight: 600;
 }
 
+/* Thinking indicator (#37) */
+
+.thinking::after {
+  content: "...";
+  animation: pulse 1.5s ease-in-out infinite;
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
 /* Streaming cursor */
 
 .streaming-cursor::after {
@@ -1471,6 +1485,8 @@ html, body {
 .sidebar-recent-item.active {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
 }
 
 .sidebar-recents-empty {

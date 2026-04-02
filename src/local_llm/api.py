@@ -46,6 +46,8 @@ class SessionInfo(NamedTuple):
 
 
 sessions: dict[str, SessionInfo] = {}
+# Mutable per-session state (source archive filename for overwrite)
+session_meta: dict[str, dict] = {}
 
 
 def _get_session(session_id: str) -> SessionInfo:
@@ -53,6 +55,29 @@ def _get_session(session_id: str) -> SessionInfo:
         log.warning("Session not found: %s", session_id)
         raise HTTPException(status_code=404, detail="Session not found")
     return sessions[session_id]
+
+
+def _init_meta(session_id: str, source_archive: str | None = None) -> None:
+    session_meta[session_id] = {"source_archive": source_archive}
+
+
+def _autosave(session_id: str) -> None:
+    """Save current session to archive, overwriting source if resumed."""
+    if session_id not in sessions:
+        return
+    info = sessions[session_id]
+    meta = session_meta.get(session_id, {})
+    overwrite = meta.get("source_archive")
+    path = archive.save(
+        info.history.messages, info.history.title,
+        info.assistant_id, info.assistant_name,
+        info.assistant_uuid, info.assistant_version,
+        info.model, info.client_ip, info.user_agent, info.created_at,
+        overwrite_path=overwrite,
+    )
+    # Capture filename on first save so subsequent saves overwrite
+    if path and not overwrite:
+        session_meta.setdefault(session_id, {})["source_archive"] = path.name
 
 
 def _create_session(model: str, assistant_config: dict | None = None) -> tuple[str, ConversationHistory]:
@@ -226,6 +251,7 @@ async def create_session(body: CreateSessionRequest, request: Request) -> dict:
         client_ip=client_ip,
         user_agent=user_agent,
     )
+    _init_meta(sid)
     ctx = await asyncio.to_thread(client.get_context_length, model)
     greeting = None
     if assistant_config:
@@ -256,7 +282,9 @@ async def get_status(session_id: str) -> dict:
     stats["client_ip"] = info.client_ip
     ratio = info.history.token_estimate_ratio
     dynamic_chars = int(stats["tokens_remaining"] * ratio)
-    stats["max_input_chars"] = min(MAX_INPUT_CHARS, dynamic_chars)
+    stats["max_input_chars"] = max(500, min(MAX_INPUT_CHARS, dynamic_chars))
+    meta = session_meta.get(session_id, {})
+    stats["source_archive"] = meta.get("source_archive")
     log.info("Status: %s", stats)
     return stats
 
@@ -265,13 +293,9 @@ async def get_status(session_id: str) -> dict:
 async def clear_session(session_id: str) -> dict:
     log.info("POST /api/sessions/%s/clear", session_id)
     info = _get_session(session_id)
+    # Auto-save already keeps the archive current; just clean up
     sessions.pop(session_id)
-    await asyncio.to_thread(
-        archive.save, info.history.messages, info.history.title,
-        info.assistant_id, info.assistant_name,
-        info.assistant_uuid, info.assistant_version,
-        info.model, info.client_ip, info.user_agent, info.created_at,
-    )
+    session_meta.pop(session_id, None)
 
     # Reload assistant config to preserve it in the new session
     assistant_config = None
@@ -292,6 +316,7 @@ async def clear_session(session_id: str) -> dict:
         client_ip=info.client_ip,
         user_agent=info.user_agent,
     )
+    _init_meta(new_sid)
     greeting = None
     if assistant_config:
         greetings = assistant_config.get("greetings", [])
@@ -409,6 +434,7 @@ async def resume_session(body: ResumeSessionRequest, request: Request) -> dict:
         client_ip=client_ip,
         user_agent=user_agent,
     )
+    _init_meta(sid, source_archive=body.filename)
     ctx = await asyncio.to_thread(client.get_context_length, model)
     log.info("Session resumed: %s with %d messages restored", sid, restored)
     return {
@@ -433,12 +459,7 @@ async def change_model(session_id: str, body: ChangeModelRequest, request: Reque
     log.info("POST /api/sessions/%s/model -> %s", session_id, body.model)
     info = _get_session(session_id)
     sessions.pop(session_id)
-    await asyncio.to_thread(
-        archive.save, info.history.messages, info.history.title,
-        info.assistant_id, info.assistant_name,
-        info.assistant_uuid, info.assistant_version,
-        info.model, info.client_ip, info.user_agent, info.created_at,
-    )
+    session_meta.pop(session_id, None)
     now = datetime.now(timezone.utc).isoformat()
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
@@ -455,6 +476,7 @@ async def change_model(session_id: str, body: ChangeModelRequest, request: Reque
         client_ip=client_ip,
         user_agent=user_agent,
     )
+    _init_meta(new_sid)
     ctx = await asyncio.to_thread(client.get_context_length, body.model)
     return {"session_id": new_sid, "model": body.model, "context_length": ctx}
 
@@ -469,12 +491,7 @@ async def change_assistant(session_id: str, body: ChangeAssistantRequest, reques
     log.info("POST /api/sessions/%s/assistant -> %s", session_id, body.assistant_id)
     info = _get_session(session_id)
     sessions.pop(session_id)
-    await asyncio.to_thread(
-        archive.save, info.history.messages, info.history.title,
-        info.assistant_id, info.assistant_name,
-        info.assistant_uuid, info.assistant_version,
-        info.model, info.client_ip, info.user_agent, info.created_at,
-    )
+    session_meta.pop(session_id, None)
 
     assistant_config = await asyncio.to_thread(assistants.get_assistant, body.assistant_id)
     if not assistant_config:
@@ -500,6 +517,7 @@ async def change_assistant(session_id: str, body: ChangeAssistantRequest, reques
         client_ip=client_ip,
         user_agent=user_agent,
     )
+    _init_meta(new_sid)
     ctx = await asyncio.to_thread(client.get_context_length, model)
     return {
         "session_id": new_sid,
@@ -550,8 +568,10 @@ async def websocket_chat(ws: WebSocket, session_id: str):
                 continue
 
             history.add("user", user_text)
+            await asyncio.to_thread(_autosave, session_id)
             messages = history.get_messages()
             log.info("Calling ollama.chat(model=%s, stream=True) with %d messages", model, len(messages))
+            await ws.send_json({"type": "thinking", "content": ""})  # (#37)
 
             token_q: asyncio.Queue[str | None] = asyncio.Queue()
             error_holder: list[Exception] = []
@@ -631,6 +651,7 @@ async def websocket_chat(ws: WebSocket, session_id: str):
 
             if complete_text:
                 history.add("assistant", complete_text)
+                await asyncio.to_thread(_autosave, session_id)
 
             if stopped:
                 await ws.send_json({"type": "stopped", "content": complete_text})

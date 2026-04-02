@@ -86,10 +86,11 @@ def server_url():
         patch("local_llm.archive.ARCHIVE_DIR", tmp_archives),
     ):
         # Import app AFTER patching so module-level state picks up mocks
-        from local_llm.api import app, sessions
+        from local_llm.api import app, sessions, session_meta
 
         # Clear any leftover sessions between runs
         sessions.clear()
+        session_meta.clear()
 
         server = uvicorn.Server(
             uvicorn.Config(
@@ -159,7 +160,7 @@ def chat_ready(chat_page):
     return chat_page
 
 
-# --- Real Ollama fixtures (no mocks) ---
+# --- Real Ollama fixtures (no mocks, subprocess server) ---
 
 REAL_MODEL = "qwen2.5:7b"
 
@@ -173,48 +174,41 @@ except Exception:
 
 @pytest.fixture(scope="session")
 def real_server_url():
-    """Start the real FastAPI server with real Ollama (no mocks).
+    """Start the real server as a subprocess. Zero shared state with mocked server."""
+    import os
+    import subprocess
+    import urllib.request
 
-    Session-scoped so all real-Ollama test files share one server.
-    Skipped when Ollama is not running.
-    """
     if not _REAL_OLLAMA_AVAILABLE:
         pytest.skip(f"Ollama not running or {REAL_MODEL} not available")
 
     port = _find_free_port()
-    _tmp_assistants = tempfile.mkdtemp()
-    _tmp_archives = tempfile.mkdtemp()
+    tmp_assistants = tempfile.mkdtemp()
+    tmp_archives = tempfile.mkdtemp()
 
-    with (
-        patch("local_llm.assistants.ASSISTANTS_DIR", _tmp_assistants),
-        patch("local_llm.archive.ARCHIVE_DIR", _tmp_archives),
-    ):
-        from local_llm.api import app as _app
-        from local_llm.api import sessions as _sessions
-        _sessions.clear()
+    env = os.environ.copy()
+    env["ASSISTANTS_DIR"] = tmp_assistants
+    env["ARCHIVE_DIR"] = tmp_archives
 
-        _server = uvicorn.Server(
-            uvicorn.Config(
-                app=_app,
-                host="127.0.0.1",
-                port=port,
-                log_level="warning",
+    proc = subprocess.Popen(
+        [
+            "poetry", "run", "uvicorn", "local_llm.api:app",
+            "--host", "127.0.0.1", "--port", str(port),
+            "--log-level", "warning",
+        ],
+        env=env,
+    )
+
+    for _ in range(100):
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/models", timeout=0.5
             )
-        )
-        _thread = threading.Thread(target=_server.run, daemon=True)
-        _thread.start()
+            break
+        except Exception:
+            time.sleep(0.2)
 
-        import urllib.request
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(
-                    f"http://127.0.0.1:{port}/api/models", timeout=0.5
-                )
-                break
-            except Exception:
-                time.sleep(0.1)
+    yield f"http://127.0.0.1:{port}"
 
-        yield f"http://127.0.0.1:{port}"
-
-        _server.should_exit = True
-        _thread.join(timeout=3)
+    proc.terminate()
+    proc.wait(timeout=5)

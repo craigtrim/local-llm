@@ -83,9 +83,10 @@ def test_resume_preserves_uuid(_isolated_env):
     # Create and clear to produce an archive
     resp = client.post("/api/sessions", json={"assistant_id": assistant["id"]})
     sid = resp.json()["session_id"]
-    from local_llm.api import sessions
+    from local_llm.api import sessions, _autosave
     sessions[sid].history.add("user", "q")
     sessions[sid].history.add("assistant", "a")
+    _autosave(sid)
     client.post(f"/api/sessions/{sid}/clear")
 
     # Get the archive

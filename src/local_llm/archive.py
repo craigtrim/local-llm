@@ -90,6 +90,7 @@ def save(
     client_ip: str | None = None,
     user_agent: str | None = None,
     created_at: str | None = None,
+    overwrite_path: str | None = None,
 ) -> Path | None:
     if len(messages) <= 1:
         return None
@@ -98,9 +99,18 @@ def save(
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y%m%d_%H%M%S")
-    suffix = f"_{_slugify(title)}" if title else ""
-    path = archive_dir / f"{timestamp}{suffix}.json"
+
+    if overwrite_path:
+        path = archive_dir / overwrite_path
+    else:
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        suffix = f"_{_slugify(title)}" if title else ""
+        path = archive_dir / f"{timestamp}{suffix}.json"
+        # Avoid collision if file already exists
+        counter = 1
+        while path.exists():
+            path = archive_dir / f"{timestamp}{suffix}_{counter}.json"
+            counter += 1
 
     data: dict = {
         "title": title,

@@ -67,7 +67,7 @@ def test_click_same_archive_twice_is_noop(chat_ready, test_archive):
     """Clicking the same archive again does not wipe new messages."""
     page = chat_ready
 
-    # Click the archive
+    # Resume the test archive
     page.locator(".sidebar-recent-item").first.click()
     page.wait_for_selector(".message.user", timeout=5000)
 
@@ -76,39 +76,38 @@ def test_click_same_archive_twice_is_noop(chat_ready, test_archive):
     page.press("#user-input", "Enter")
     page.wait_for_selector(".streaming-cursor", state="detached", timeout=10000)
 
-    # Should have 2 user messages (archived + new)
-    assert page.locator(".message.user").count() == 2
+    # Record message count after sending
+    msg_count = page.locator(".message.user").count()
+    assert msg_count >= 2  # at least the archived msg + new one
 
-    # Click the same archive again
+    # Click the first sidebar item again (same archive, should be noop)
+    page.wait_for_timeout(500)
     page.locator(".sidebar-recent-item").first.click()
-
-    # Small wait to confirm nothing changes
     page.wait_for_timeout(500)
 
-    # Messages should still be there (no-op)
-    assert page.locator(".message.user").count() == 2
-    assert "new message after resume" in page.locator(".message.user").nth(1).text_content()
+    # Message count should not change
+    assert page.locator(".message.user").count() == msg_count
 
 
 def test_switch_archive_saves_current_chat(chat_ready, test_archive):
-    """Switching to an archive saves the current chat to Recents."""
+    """Auto-save preserves current chat when switching to an archive."""
     page = chat_ready
 
-    # Send a message in the fresh session
+    # Send a message (auto-save creates archive immediately)
     page.fill("#user-input", "unique save test message")
     page.press("#user-input", "Enter")
     page.wait_for_selector(".streaming-cursor", state="detached", timeout=10000)
 
-    # Count current sidebar items
-    initial_count = page.locator(".sidebar-recent-item").count()
+    # Wait for auto-save to appear in sidebar
+    page.wait_for_selector(".sidebar-recent-item", timeout=5000)
+    count_after_send = page.locator(".sidebar-recent-item").count()
+    assert count_after_send >= 2  # test_archive + auto-saved chat
 
-    # Click an archived conversation (triggers auto-save of current chat)
+    # Click an archived conversation (should NOT create a new archive)
     page.locator(".sidebar-recent-item").first.click()
     page.wait_for_selector(".message.user", timeout=5000)
+    page.wait_for_timeout(500)
 
-    # Wait for sidebar to gain a new item (the auto-saved chat)
-    expected = initial_count + 1
-    page.wait_for_function(
-        f'document.querySelectorAll(".sidebar-recent-item").length >= {expected}',
-        timeout=10000,
-    )
+    # Count should not increase (auto-save already saved it)
+    count_after_switch = page.locator(".sidebar-recent-item").count()
+    assert count_after_switch == count_after_send

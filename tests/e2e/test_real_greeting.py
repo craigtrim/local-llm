@@ -11,10 +11,13 @@ import pytest
 
 from .conftest import REAL_MODEL, _REAL_OLLAMA_AVAILABLE
 
-pytestmark = pytest.mark.skipif(
-    not _REAL_OLLAMA_AVAILABLE,
-    reason=f"Ollama not running or {REAL_MODEL} not available",
-)
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.skipif(
+        not _REAL_OLLAMA_AVAILABLE,
+        reason=f"Ollama not running or {REAL_MODEL} not available",
+    ),
+]
 
 
 def test_real_greeting_generation(real_server_url):

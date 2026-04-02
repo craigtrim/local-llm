@@ -322,7 +322,15 @@ function connectWebSocket() {
       console.log("[ws] Message received:", msg.type, msg.content);
     }
 
-    if (msg.type === "token") {
+    if (msg.type === "thinking") {
+      // Show pulsing dots while waiting for first token (#37)
+      if (activeAssistantEl) {
+        activeAssistantEl.querySelector(".message-content").classList.add("thinking");
+      }
+    } else if (msg.type === "token") {
+      if (activeAssistantEl) {
+        activeAssistantEl.querySelector(".message-content").classList.remove("thinking");
+      }
       streamBuffer += msg.content;
       renderStreamingContent();
     } else if (msg.type === "done") {
@@ -418,6 +426,7 @@ function finishStreaming(finalContent) {
   activeAssistantEl = null;
   scrollToBottom();
   updateContextBar();
+  loadArchives();
 }
 
 // --- Command popup ---
@@ -611,6 +620,9 @@ async function updateContextBar() {
       maxInputChars = data.max_input_chars;
       updateInputLimit();
     }
+    if (data.source_archive && data.source_archive !== currentArchiveFilename) {
+      currentArchiveFilename = data.source_archive;
+    }
     const empty = data.qa_count === 0;
     document.getElementById("clear-btn").disabled = empty;
     document.getElementById("context-clear-btn").disabled = empty;
@@ -622,10 +634,27 @@ async function updateContextBar() {
 
 // --- DOM helpers ---
 
-function appendMessage(role, content) {
+function appendMessage(role, content, msgType) {
   console.log("[dom] Appending message, role:", role, "content length:", content.length);
   const el = document.createElement("div");
   el.className = `message ${role}`;
+
+  // Summary messages render as collapsible callouts (#51)
+  if (msgType === "summary") {
+    el.className = "message summary";
+    const details = document.createElement("details");
+    const summaryEl = document.createElement("summary");
+    summaryEl.textContent = "Summary of earlier conversation";
+    details.appendChild(summaryEl);
+    const bodyEl = document.createElement("div");
+    bodyEl.className = "summary-body";
+    bodyEl.innerHTML = renderMarkdown(content);
+    details.appendChild(bodyEl);
+    el.appendChild(details);
+    messagesEl.appendChild(el);
+    scrollToBottom();
+    return el;
+  }
 
   const roleLabel = document.createElement("div");
   roleLabel.className = "message-role";
@@ -920,7 +949,7 @@ async function loadArchives() {
     sidebarRecentsList.innerHTML = "";
     archives.forEach((arc) => {
       const btn = document.createElement("button");
-      btn.className = "sidebar-recent-item";
+      btn.className = "sidebar-recent-item" + (arc.filename === currentArchiveFilename ? " active" : "");
       btn.title = arc.title;
       btn.addEventListener("click", () => loadConversation(arc.filename, btn, arc.assistant_id));
 
@@ -1107,8 +1136,13 @@ async function loadConversation(filename, btnEl, archiveAssistantId) {
     // Display archived messages
     messagesEl.innerHTML = "";
     messages.forEach((msg) => {
-      if (msg.role === "system") return;
-      appendMessage(msg.role, msg.content);
+      if (msg.type === "summary") {
+        appendMessage(msg.role, msg.content, "summary");
+      } else if (msg.role === "system") {
+        return;
+      } else {
+        appendMessage(msg.role, msg.content);
+      }
     });
 
     // Show the chat container if not visible
@@ -1321,6 +1355,19 @@ async function saveWizard() {
   const contextReserve = document.getElementById("wizard-context-reserve").value;
   if (contextReserve) config.context_reserve = parseInt(contextReserve);
 
+  // Loading state with animated dots (#44)
+  const saveBtn = document.getElementById("wizard-save");
+  const originalText = saveBtn.textContent;
+  const baseText = wizardEditId ? "Saving" : "Creating";
+  const dotFrames = [".", "..", "..."];
+  let dotIndex = 0;
+  saveBtn.textContent = baseText + dotFrames[dotIndex];
+  saveBtn.disabled = true;
+  const dotInterval = setInterval(() => {
+    dotIndex = (dotIndex + 1) % dotFrames.length;
+    saveBtn.textContent = baseText + dotFrames[dotIndex];
+  }, 400);
+
   try {
     let res;
     if (wizardEditId) {
@@ -1348,6 +1395,10 @@ async function saveWizard() {
     await init();
   } catch (err) {
     console.error("[wizard] Save failed:", err);
+  } finally {
+    clearInterval(dotInterval);
+    saveBtn.textContent = originalText;
+    saveBtn.disabled = false;
   }
 }
 

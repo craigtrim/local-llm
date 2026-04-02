@@ -1,4 +1,4 @@
-.PHONY: all install run test web
+.PHONY: all install run test smoke web
 
 all: install test
 
@@ -10,7 +10,10 @@ run:
 	poetry run local-llm
 
 test:
-	poetry run pytest tests/ -v
+	poetry run pytest tests/ -v -m "not smoke"
+
+smoke:
+	poetry run pytest tests/e2e/ -v -m smoke
 
 web:
 	poetry run local-llm-web
