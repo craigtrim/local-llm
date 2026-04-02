@@ -63,16 +63,15 @@ class ConversationHistory:
 
     def get_messages(self) -> list[dict]:
         budget = self._context_limit - self._context_reserve
-        if self._estimate_tokens(self._messages) <= budget:
-            msgs = list(self._messages)
-        else:
-            msgs = self._truncate(budget)
-        return [{"role": m["role"], "content": m["content"]} for m in msgs]
+        if self._estimate_tokens(self._messages) > budget:
+            self._compact(budget)
+        return [{"role": m["role"], "content": m["content"]} for m in self._messages]
 
     def _estimate_tokens(self, messages: list[dict]) -> int:
         return int(sum(len(m["content"]) / self._token_estimate_ratio for m in messages))
 
-    def _truncate(self, budget: int) -> list[dict]:
+    def _compact(self, budget: int) -> None:
+        """Permanently evict old messages and replace with a summary."""
         if self._on_truncate:
             self._on_truncate(list(self._messages))
 
@@ -84,26 +83,39 @@ class ConversationHistory:
         while conversation and self._estimate_tokens(system + conversation) > budget:
             evicted.append(conversation.pop(0))
 
-        if evicted and self._summarize_fn:
+        if not evicted:
+            return
+
+        if self._summarize_fn:
             try:
                 summary = self._summarize_fn(evicted)
                 self._summary_count += 1
                 summary_msg = {
                     "role": "system",
+                    "type": "summary",
                     "content": f"[Summary of earlier conversation]\n{summary}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "evicted_count": len(evicted),
                 }
             except Exception:
                 summary_msg = {
                     "role": "system",
+                    "type": "summary",
                     "content": "[Earlier conversation history was truncated to fit the context window.]",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "evicted_count": len(evicted),
                 }
         else:
             summary_msg = {
                 "role": "system",
+                "type": "summary",
                 "content": "[Earlier conversation history was truncated to fit the context window.]",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "evicted_count": len(evicted),
             }
 
-        return system + [summary_msg] + conversation
+        # Permanently replace _messages with compacted version
+        self._messages = system + [summary_msg] + conversation
 
     @property
     def token_estimate_ratio(self) -> float:

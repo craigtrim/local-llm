@@ -945,6 +945,45 @@ html, body {
   font-style: italic;
 }
 
+/* --- Summary callout (#51) --- */
+
+.message.summary {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin: 8px 0;
+  max-width: 100%;
+}
+
+.message.summary details summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message.summary details summary::before {
+  content: "\25B6";
+  font-size: 9px;
+  transition: transform 0.15s;
+}
+
+.message.summary details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.message.summary .summary-body {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* Markdown content styling */
 
 .message-content p {
