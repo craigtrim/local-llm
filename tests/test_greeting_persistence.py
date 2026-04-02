@@ -19,7 +19,7 @@ _call_count = 0
 def _greeting_fn(name, system_prompt, model):
     global _call_count
     _call_count += 1
-    return [f"Hi from {name} ({system_prompt[:10]}) call{_call_count} #{i}" for i in range(20)]
+    return [f"Hi from {name} ({system_prompt[:10]}) call{_call_count} #{i}" for i in range(10)]
 
 
 def _make(name="Test", model="m", prompt="p", **kw):
@@ -29,12 +29,12 @@ def _make(name="Test", model="m", prompt="p", **kw):
     )
 
 
-def test_new_assistant_gets_20_greetings():
-    """Creating a new assistant must produce exactly 20 greetings (#52)."""
+def test_new_assistant_gets_10_greetings():
+    """Creating a new assistant must produce exactly 10 greetings (#52, #53)."""
     saved = _make(name="Fresh")
     greetings = saved.get("greetings", [])
     assert isinstance(greetings, list)
-    assert len(greetings) == 20, f"Expected 20 greetings, got {len(greetings)}"
+    assert len(greetings) == 10, f"Expected 10 greetings, got {len(greetings)}"
     for g in greetings:
         assert g.strip(), f"Empty greeting: {g!r}"
 
@@ -63,7 +63,7 @@ def test_greetings_survive_rename():
         generate_greetings_fn=_greeting_fn,
     )
     assert "greetings" in renamed
-    assert len(renamed["greetings"]) == 20
+    assert len(renamed["greetings"]) == 10
 
 
 def test_greetings_in_version_snapshot(_tmp_assistants_dir):

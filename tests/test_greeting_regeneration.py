@@ -20,7 +20,7 @@ _call_count = 0
 def _greeting_fn(name, system_prompt, model):
     global _call_count
     _call_count += 1
-    return [f"{name}-{system_prompt[:10]}-{_call_count}-{i}" for i in range(20)]
+    return [f"{name}-{system_prompt[:10]}-{_call_count}-{i}" for i in range(10)]
 
 
 @pytest.fixture(autouse=True)

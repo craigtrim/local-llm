@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 import ollama
 
@@ -51,23 +52,30 @@ def generate_title(messages: list[dict], model: str, prompt: str) -> str:
 
 
 def generate_greetings(name: str, system_prompt: str, model: str, count: int | None = None) -> list[str]:
-    """Generate greeting variations for an assistant using an LLM."""
+    """Generate greeting variations for an assistant using an LLM (#53)."""
     count = count or GREETING_COUNT
     prompt = GREETING_PROMPT.format(name=name, system_prompt=system_prompt, count=count)
     try:
         raw = chat(model, [{"role": "user", "content": prompt}])
-        # Parse the JSON array from the response
-        # Strip markdown fences if present
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-            text = text.rsplit("```", 1)[0]
-        greetings = json.loads(text)
-        if isinstance(greetings, list) and all(isinstance(g, str) for g in greetings):
-            # Filter empty strings
-            greetings = [g.strip() for g in greetings if g.strip()]
-            log.info("Generated %d greetings for %s", len(greetings), name)
-            return greetings[:count]
+        greetings = _parse_greetings(raw)
+        log.info("Generated %d greetings for %s", len(greetings), name)
+        return greetings[:count]
     except Exception as e:
         log.warning("Failed to generate greetings for %s: %s", name, e)
     return []
+
+
+def _parse_greetings(raw: str) -> list[str]:
+    """Parse newline-delimited greetings, stripping numbering and bullets (#53)."""
+    lines = raw.strip().splitlines()
+    greetings = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Strip common numbering: "1. ", "1) ", "- ", "* "
+        line = re.sub(r"^(\d+[\.\)]\s*|[-*]\s+)", "", line)
+        line = line.strip().strip('"').strip("'")
+        if line:
+            greetings.append(line)
+    return greetings

@@ -50,11 +50,12 @@ GREETING_PROMPT = _model.get(
     "greeting_prompt",
     'You are an assistant named "{name}". Your role is described by this system prompt:\n'
     "{system_prompt}\n"
-    "Generate exactly {count} short, unique greeting messages (1-2 sentences each) that you would "
-    "use to welcome a user at the start of a new conversation. Each greeting should reflect your "
-    "personality and capabilities. Respond with ONLY a JSON array of strings, no other text.",
+    "Generate between 5 and {count} short, unique greeting messages (1-2 sentences each) that you "
+    "would use to welcome a user at the start of a new conversation. Each greeting should reflect "
+    "your personality and capabilities. Write one greeting per line. No numbering, no quotes, no "
+    "bullet points, no other text.",
 )
-GREETING_COUNT = _model.get("greeting_count", 20)
+GREETING_COUNT = _model.get("greeting_count", 10)
 
 # General config (env vars override YAML for test isolation)
 ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR") or _resolve_dir(_general.get("archive_dir", ".user/archives"))

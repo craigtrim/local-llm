@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-FAKE_GREETINGS = [f"Hello {i}!" for i in range(20)]
+FAKE_GREETINGS = [f"Hello {i}!" for i in range(10)]
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def _isolated_env(tmp_path):
     def _fake_chat(model, messages):
         text = messages[-1].get("content", "") if messages else ""
         if "unique greeting messages" in text:
-            return json.dumps(FAKE_GREETINGS)
+            return "\n".join(FAKE_GREETINGS)
         return "test response"
 
     with (
@@ -80,7 +80,7 @@ def test_create_assistant_returns_greetings(_isolated_env):
     client = _isolated_env
     assistant = _create_assistant(client)
     assert "greetings" in assistant
-    assert len(assistant["greetings"]) == 20
+    assert len(assistant["greetings"]) == 10
 
 
 def test_update_prompt_returns_new_greetings(_isolated_env):
@@ -93,7 +93,7 @@ def test_update_prompt_returns_new_greetings(_isolated_env):
     new_greetings = resp.json()["greetings"]
     # Greetings should be regenerated (different call count = different content)
     assert "greetings" in resp.json()
-    assert len(new_greetings) == 20
+    assert len(new_greetings) == 10
 
 
 def test_update_color_preserves_greetings(_isolated_env):
@@ -115,5 +115,5 @@ def test_greeting_rotates(_isolated_env):
     for _ in range(10):
         resp = client.post("/api/sessions", json={"assistant_id": assistant["id"]})
         greetings_seen.add(resp.json()["greeting"])
-    # With 20 options and 10 draws, extremely unlikely to get all the same
+    # With 10 options and 10 draws, unlikely to get all the same
     assert len(greetings_seen) > 1, "All 10 sessions got the same greeting"
