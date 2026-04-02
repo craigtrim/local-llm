@@ -29,6 +29,24 @@ def _make(name="Test", model="m", prompt="p", **kw):
     )
 
 
+def test_new_assistant_gets_20_greetings():
+    """Creating a new assistant must produce exactly 20 greetings (#52)."""
+    saved = _make(name="Fresh")
+    greetings = saved.get("greetings", [])
+    assert isinstance(greetings, list)
+    assert len(greetings) == 20, f"Expected 20 greetings, got {len(greetings)}"
+    for g in greetings:
+        assert g.strip(), f"Empty greeting: {g!r}"
+
+
+def test_new_assistant_without_fn_gets_empty_greetings():
+    """Without generate_greetings_fn, new assistant gets empty list (#52)."""
+    saved = assistants.save_assistant(
+        {"name": "NoFn", "model": "m", "system_prompt": "p"},
+    )
+    assert saved.get("greetings") == []
+
+
 def test_greetings_survive_save_load_cycle():
     saved = _make(name="Persist")
     loaded = assistants.get_assistant("persist")
