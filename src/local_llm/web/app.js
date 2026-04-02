@@ -1166,10 +1166,16 @@ function openWizard(existingAssistant = null) {
   document.getElementById("wizard-description").value = existingAssistant ? (existingAssistant.description || "") : "";
   document.getElementById("wizard-system-prompt").value = existingAssistant ? existingAssistant.system_prompt : "";
 
-  // Context overrides
-  document.getElementById("wizard-context-tokens").value = existingAssistant?.context_tokens || "";
-  document.getElementById("wizard-token-ratio").value = existingAssistant?.token_estimate_ratio || "";
-  document.getElementById("wizard-context-reserve").value = existingAssistant?.context_reserve || "";
+  // Context overrides (sliders)
+  const ctxVal = existingAssistant?.context_tokens || 4096;
+  const ratioVal = existingAssistant?.token_estimate_ratio || 4.0;
+  const reserveVal = existingAssistant?.context_reserve || 512;
+  document.getElementById("wizard-context-tokens").value = ctxVal;
+  document.getElementById("wizard-context-tokens-val").textContent = ctxVal;
+  document.getElementById("wizard-token-ratio").value = ratioVal;
+  document.getElementById("wizard-token-ratio-val").textContent = ratioVal;
+  document.getElementById("wizard-context-reserve").value = reserveVal;
+  document.getElementById("wizard-context-reserve-val").textContent = reserveVal;
 
   // Color
   wizardSelectedColor = existingAssistant?.avatar_color || ASSISTANT_COLORS[0];
@@ -1360,7 +1366,33 @@ document.getElementById("wizard-back").addEventListener("click", () => {
   showWizardStep(wizardStep - 1);
 });
 
+// Step dot click navigation (#42)
+document.querySelectorAll(".wizard-step-dot").forEach((dot) => {
+  dot.addEventListener("click", () => {
+    const target = parseInt(dot.dataset.step);
+    if (target === wizardStep) return;
+    if (target < wizardStep) {
+      showWizardStep(target);
+    } else {
+      for (let s = wizardStep; s < target; s++) {
+        if (!validateWizardStep(s)) {
+          showWizardStep(s);
+          return;
+        }
+      }
+      showWizardStep(target);
+    }
+  });
+});
+
 document.getElementById("wizard-save").addEventListener("click", saveWizard);
+
+// Slider value display (#43)
+["wizard-context-tokens", "wizard-token-ratio", "wizard-context-reserve"].forEach((id) => {
+  const slider = document.getElementById(id);
+  const label = document.getElementById(id + "-val");
+  slider.addEventListener("input", () => { label.textContent = slider.value; });
+});
 
 // Template buttons
 document.querySelectorAll(".template-btn").forEach((btn) => {

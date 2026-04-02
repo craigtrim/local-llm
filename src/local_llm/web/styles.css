@@ -359,7 +359,12 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-dim);
+  cursor: pointer;
   transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.wizard-step-dot:hover {
+  border-color: var(--accent);
 }
 
 .wizard-step-dot.active {
@@ -500,6 +505,53 @@ html, body {
   height: 10px;
   border-radius: 50%;
   background: var(--bg-primary);
+}
+
+/* Wizard sliders (#43) */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wizard-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+}
+
+.wizard-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.wizard-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+
+.slider-value {
+  min-width: 52px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Wizard model grid */
