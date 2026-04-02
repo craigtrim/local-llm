@@ -10,9 +10,9 @@ def test_clear_resets_conversation(chat_ready):
     page.press("#user-input", "Enter")
     page.wait_for_selector(".streaming-cursor", state="detached", timeout=10000)
 
-    # Verify messages exist
+    # Verify messages exist (exclude greeting)
     assert page.locator(".message.user").count() == 1
-    assert page.locator(".message.assistant").count() == 1
+    assert page.locator(".message.assistant:not(.greeting)").count() == 1
 
     # Execute /clear
     page.fill("#user-input", "/clear")
@@ -21,9 +21,9 @@ def test_clear_resets_conversation(chat_ready):
     # Wait for the system message
     page.wait_for_selector(".message.system", timeout=5000)
 
-    # Old messages should be gone, only system message remains
+    # Old messages should be gone (greeting + system message may exist)
     assert page.locator(".message.user").count() == 0
-    assert page.locator(".message.assistant").count() == 0
+    assert page.locator(".message.assistant:not(.greeting)").count() == 0
     assert "Conversation cleared" in page.locator(".message.system").text_content()
 
 

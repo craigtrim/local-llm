@@ -254,6 +254,10 @@ async function selectAssistant(assistantId, model) {
     assistantOverlay.style.display = "none";
     chatContainer.style.display = "flex";
     messagesEl.innerHTML = "";
+    if (data.greeting) {
+      const el = appendMessage("assistant", data.greeting);
+      if (el) el.classList.add("greeting");
+    }
     connectWebSocket();
     updateContextBar();
     loadArchives();
@@ -314,7 +318,9 @@ function connectWebSocket() {
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    console.log("[ws] Message received:", msg.type, msg.type === "token" ? JSON.stringify(msg.content).slice(0, 50) : msg.content);
+    if (msg.type !== "token") {
+      console.log("[ws] Message received:", msg.type, msg.content);
+    }
 
     if (msg.type === "token") {
       streamBuffer += msg.content;
@@ -496,6 +502,10 @@ async function handleClear() {
     sessionId = data.session_id;
     currentArchiveFilename = null;
     messagesEl.innerHTML = "";
+    if (data.greeting) {
+      const el = appendMessage("assistant", data.greeting);
+      if (el) el.classList.add("greeting");
+    }
     headerTitle.textContent = "local-llm";
     document.title = "local-llm";
     connectWebSocket();
@@ -928,6 +938,23 @@ async function loadArchives() {
       titleSpan.textContent = arc.title;
       btn.appendChild(titleSpan);
 
+      // Rename via double-click on title (#41)
+      titleSpan.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        startSidebarRename(titleSpan, btn, arc);
+      });
+
+      // Rename icon (#41)
+      const renameSpan = document.createElement("span");
+      renameSpan.className = "sidebar-recent-rename";
+      renameSpan.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+      renameSpan.title = "Rename conversation";
+      renameSpan.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startSidebarRename(titleSpan, btn, arc);
+      });
+      btn.appendChild(renameSpan);
+
       const deleteSpan = document.createElement("span");
       deleteSpan.className = "sidebar-recent-delete";
       deleteSpan.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
@@ -957,6 +984,51 @@ async function loadArchives() {
     console.error("[sidebar] Failed to load archives:", err);
     sidebarRecentsList.innerHTML = '<div class="sidebar-recents-empty">Failed to load</div>';
   }
+}
+
+// Inline rename for sidebar archive titles (#41)
+function startSidebarRename(titleSpan, btn, arc) {
+  const current = titleSpan.textContent;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = current;
+  input.className = "sidebar-rename-edit";
+  input.placeholder = "Chat title...";
+  titleSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  async function commit() {
+    const newTitle = input.value.trim() || current;
+    input.replaceWith(titleSpan);
+    if (newTitle !== current) {
+      titleSpan.textContent = newTitle;
+      btn.title = newTitle;
+      try {
+        await fetch(`/api/archives/${arc.filename}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTitle }),
+        });
+        console.log("[sidebar] Renamed archive:", arc.filename, "->", newTitle);
+        // Sync header title if this archive is the active conversation
+        if (arc.filename === currentArchiveFilename) {
+          headerTitle.textContent = newTitle;
+          document.title = newTitle + " \u2014 local-llm";
+        }
+      } catch (err) {
+        console.error("[sidebar] Rename failed:", err);
+        titleSpan.textContent = current;
+        btn.title = current;
+      }
+    }
+  }
+
+  input.addEventListener("blur", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+    if (e.key === "Escape") { input.value = current; input.blur(); }
+  });
 }
 
 async function loadConversation(filename, btnEl, archiveAssistantId) {

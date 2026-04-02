@@ -13,8 +13,8 @@ def test_send_message_and_receive_response(chat_ready):
     user_msg.wait_for(state="visible")
     assert "hello" in user_msg.text_content()
 
-    # Assistant message should stream in and complete
-    assistant_msg = page.locator(".message.assistant")
+    # Assistant message should stream in and complete (exclude greeting)
+    assistant_msg = page.locator(".message.assistant:not(.greeting)")
     assistant_msg.wait_for(state="visible")
 
     # Wait for streaming to finish (cursor disappears)
@@ -38,8 +38,8 @@ def test_shift_enter_adds_newline(chat_ready):
     assert "line1" in value
     assert "line2" in value
 
-    # No messages should have been sent
-    messages = page.locator(".message")
+    # No messages should have been sent (greeting may exist)
+    messages = page.locator(".message:not(.greeting)")
     assert messages.count() == 0
 
 
@@ -49,7 +49,7 @@ def test_empty_input_not_sent(chat_ready):
 
     page.press("#user-input", "Enter")
 
-    messages = page.locator(".message")
+    messages = page.locator(".message:not(.greeting)")
     assert messages.count() == 0
 
 
@@ -68,5 +68,5 @@ def test_multiple_messages(chat_ready):
     user_msgs = page.locator(".message.user")
     assert user_msgs.count() == 2
 
-    assistant_msgs = page.locator(".message.assistant")
+    assistant_msgs = page.locator(".message.assistant:not(.greeting)")
     assert assistant_msgs.count() == 2

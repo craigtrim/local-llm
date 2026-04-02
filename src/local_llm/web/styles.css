@@ -1377,8 +1377,38 @@ html, body {
   color: var(--error);
 }
 
+.sidebar-recent-rename {
+  flex-shrink: 0;
+  opacity: 0;
+  color: var(--text-dim);
+  padding: 2px;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.sidebar-recent-rename:hover {
+  color: var(--accent);
+}
+
+.sidebar-recent-item:hover .sidebar-recent-rename,
 .sidebar-recent-item:hover .sidebar-recent-delete {
   opacity: 1;
+}
+
+.sidebar-rename-edit {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 4px;
+  outline: none;
 }
 
 .sidebar-recent-item:hover {
