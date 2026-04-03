@@ -966,6 +966,49 @@ html, body {
   font-style: italic;
 }
 
+/* --- Per-message action icons (#20) --- */
+
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message.last-assistant .msg-actions {
+  opacity: 1;
+}
+
+.message.assistant:hover .msg-actions {
+  opacity: 1;
+}
+
+.msg-actions button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-dim);
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.msg-actions button:hover {
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.msg-actions button.action-selected {
+  color: var(--accent);
+}
+
+.msg-actions button.action-flash {
+  color: var(--accent);
+}
+
 /* --- Summary callout (#51) --- */
 
 .message.summary {

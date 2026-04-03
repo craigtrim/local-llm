@@ -46,6 +46,13 @@ class ConversationHistory:
         if role == "assistant" and not self.title and not self._user_renamed:
             self._maybe_generate_title()
 
+    def pop_last_assistant(self) -> dict | None:
+        """Remove and return the last assistant message, if any (#20)."""
+        for i in range(len(self._messages) - 1, -1, -1):
+            if self._messages[i]["role"] == "assistant":
+                return self._messages.pop(i)
+        return None
+
     def set_title(self, title: str) -> None:
         self.title = title
         self._user_renamed = True

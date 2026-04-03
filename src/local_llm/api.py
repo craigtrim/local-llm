@@ -1,4 +1,5 @@
 import asyncio
+import json as json_mod
 import logging
 import random
 import threading
@@ -324,6 +325,51 @@ async def clear_session(session_id: str) -> dict:
             greeting = random.choice(greetings)
     log.info("Session cleared, new session: %s", new_sid)
     return {"session_id": new_sid, "model": info.model, "greeting": greeting}
+
+
+@app.post("/api/sessions/{session_id}/pop")
+async def pop_last_response(session_id: str) -> dict:
+    """Remove the last assistant message for regeneration (#20)."""
+    log.info("POST /api/sessions/%s/pop", session_id)
+    info = _get_session(session_id)
+    removed = info.history.pop_last_assistant()
+    if removed is None:
+        raise HTTPException(status_code=409, detail="No assistant message to remove")
+    await asyncio.to_thread(_autosave, session_id)
+    return {"removed": True}
+
+
+class FeedbackPayload(BaseModel):
+    session_id: str
+    rating: str
+    message_content: str
+    message_index: int
+
+
+@app.post("/api/feedback")
+async def submit_feedback(payload: FeedbackPayload) -> dict:
+    """Save per-message thumbs up/down feedback (#20)."""
+    log.info("POST /api/feedback session=%s rating=%s", payload.session_id, payload.rating)
+    if payload.rating not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="rating must be 'up' or 'down'")
+    feedback_dir = Path(".user/feedback")
+    feedback_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+    filename = f"{payload.session_id}_{ts}_{payload.rating}.json"
+    data: dict = {
+        "session_id": payload.session_id,
+        "rating": payload.rating,
+        "message_index": payload.message_index,
+        "message_content": payload.message_content,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.session_id in sessions:
+        info = sessions[payload.session_id]
+        data["model"] = info.model
+        data["assistant_id"] = info.assistant_id
+        data["assistant_name"] = info.assistant_name
+    (feedback_dir / filename).write_text(json_mod.dumps(data, indent=2))
+    return {"saved": True}
 
 
 class RenameTitleRequest(BaseModel):

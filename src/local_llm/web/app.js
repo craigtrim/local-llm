@@ -247,6 +247,8 @@ async function selectAssistant(assistantId, model) {
     currentAssistantName = data.assistant_name;
     currentAssistantColor = data.assistant_color;
     currentArchiveFilename = null;
+    lastUserText = "";
+    msgCounter = 0;
 
     headerModel.textContent = data.model;
     updateAssistantUI();
@@ -510,6 +512,8 @@ async function handleClear() {
     console.log("[clear] New session:", data);
     sessionId = data.session_id;
     currentArchiveFilename = null;
+    lastUserText = "";
+    msgCounter = 0;
     messagesEl.innerHTML = "";
     if (data.greeting) {
       const el = appendMessage("assistant", data.greeting);
@@ -708,6 +712,87 @@ function renderMarkdown(text) {
 
 function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// --- Per-message action icons (#20) ---
+
+const ICON_COPY = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.5a1.5 1.5 0 00-1.5-1.5H3.5A1.5 1.5 0 002 3.5V9a1.5 1.5 0 001.5 1.5h2"/></svg>';
+const ICON_THUMB_UP = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14H3a1 1 0 01-1-1V8a1 1 0 011-1h2m0 7V7m0 7h6.4a2 2 0 002-1.7l.7-4.6A1 1 0 0013.1 6H9.5V3a1.5 1.5 0 00-1.5-1.5L5 7"/></svg>';
+const ICON_THUMB_DOWN = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2h2a1 1 0 011 1v5a1 1 0 01-1 1h-2m0-7v7m0-7H4.6a2 2 0 00-2 1.7l-.7 4.6A1 1 0 002.9 10H6.5v3a1.5 1.5 0 001.5 1.5L11 9"/></svg>';
+const ICON_REGENERATE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 2.5v4h4"/><path d="M2.3 10a6 6 0 105-7.5L1.5 6.5"/></svg>';
+
+function makeActionBtn(cls, svgHtml, title) {
+  const btn = document.createElement("button");
+  btn.className = `msg-action ${cls}`;
+  btn.innerHTML = svgHtml;
+  btn.title = title;
+  return btn;
+}
+
+function buildActionBar(msgEl) {
+  const bar = document.createElement("div");
+  bar.className = "msg-actions";
+
+  const copyBtn = makeActionBtn("copy-btn", ICON_COPY, "Copy to clipboard");
+  copyBtn.addEventListener("click", () => {
+    const content = msgEl.querySelector(".message-content");
+    const text = content.innerText || content.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.classList.add("action-flash");
+      setTimeout(() => copyBtn.classList.remove("action-flash"), 1200);
+    });
+  });
+
+  const upBtn = makeActionBtn("thumb-up-btn", ICON_THUMB_UP, "Good response");
+  const downBtn = makeActionBtn("thumb-down-btn", ICON_THUMB_DOWN, "Bad response");
+  upBtn.addEventListener("click", () => sendFeedback(msgEl, "up", upBtn, downBtn));
+  downBtn.addEventListener("click", () => sendFeedback(msgEl, "down", downBtn, upBtn));
+
+  const regenBtn = makeActionBtn("regenerate-btn", ICON_REGENERATE, "Regenerate response");
+  regenBtn.addEventListener("click", () => handleRegenerate(msgEl));
+
+  bar.append(copyBtn, upBtn, downBtn, regenBtn);
+  msgEl.appendChild(bar);
+}
+
+async function sendFeedback(msgEl, rating, activeBtn, otherBtn) {
+  const content = msgEl.querySelector(".message-content").innerText;
+  const idx = parseInt(msgEl.dataset.msgIdx, 10);
+  activeBtn.classList.toggle("action-selected");
+  otherBtn.classList.remove("action-selected");
+  const currentRating = activeBtn.classList.contains("action-selected") ? rating : null;
+  if (!currentRating) return;
+  await fetch("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      rating: rating,
+      message_content: content,
+      message_index: idx,
+    }),
+  });
+}
+
+async function handleRegenerate(msgEl) {
+  if (isStreaming || !lastUserText) return;
+  try {
+    const res = await fetch(`/api/sessions/${sessionId}/pop`, { method: "POST" });
+    if (!res.ok) {
+      appendSystemMessage("Cannot regenerate. The response may have been compacted.");
+      return;
+    }
+    msgEl.remove();
+    isStreaming = true;
+    setStreamingUI(true);
+    streamBuffer = "";
+    activeAssistantEl = appendMessage("assistant", "");
+    activeAssistantEl.querySelector(".message-content").classList.add("streaming-cursor");
+    ws.send(lastUserText);
+  } catch (err) {
+    console.error("[regenerate] Failed:", err);
+    appendSystemMessage("Failed to regenerate response.");
+  }
 }
 
 // --- Input handling ---
@@ -1135,17 +1220,25 @@ async function loadConversation(filename, btnEl, archiveAssistantId) {
     const archiveData = await archiveRes.json();
     const messages = archiveData.messages || [];
 
-    // Display archived messages
+    // Display archived messages (#20: attach action bars to assistant messages)
     messagesEl.innerHTML = "";
+    msgCounter = 0;
+    let lastAssistantEl = null;
     messages.forEach((msg) => {
       if (msg.type === "summary") {
         appendMessage(msg.role, msg.content, "summary");
       } else if (msg.role === "system") {
         return;
       } else {
-        appendMessage(msg.role, msg.content);
+        const el = appendMessage(msg.role, msg.content);
+        if (msg.role === "assistant") {
+          buildActionBar(el);
+          lastAssistantEl = el;
+        }
+        if (msg.role === "user") lastUserText = msg.content;
       }
     });
+    if (lastAssistantEl) lastAssistantEl.classList.add("last-assistant");
 
     // Show the chat container if not visible
     if (chatContainer.style.display === "none") {
