@@ -1,6 +1,6 @@
 .PHONY: all install run test smoke web
 
-all: install test
+all: install test smoke
 
 install:
 	poetry install

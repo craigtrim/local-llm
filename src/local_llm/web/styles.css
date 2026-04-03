@@ -690,6 +690,27 @@ html, body {
   color: var(--text-primary);
 }
 
+#wizard-save {
+  min-width: 140px;
+}
+
+#wizard-status-msg {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  text-align: center;
+}
+
+#wizard-status-msg.visible {
+  opacity: 1;
+}
+
 /* Model option (reused in wizard) */
 
 .model-option {

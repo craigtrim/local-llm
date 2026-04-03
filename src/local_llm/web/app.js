@@ -1074,6 +1074,14 @@ async function loadConversation(filename, btnEl, archiveAssistantId) {
     return;
   }
 
+  // Immediate feedback (#54)
+  sidebarRecentsList.querySelectorAll(".sidebar-recent-item").forEach((el) => {
+    el.classList.remove("active");
+  });
+  if (btnEl) btnEl.classList.add("active");
+  messagesEl.innerHTML = "";
+  appendSystemMessage("Loading conversation...");
+
   try {
     // Archive current session before switching
     if (sessionId) {
@@ -1126,12 +1134,6 @@ async function loadConversation(filename, btnEl, archiveAssistantId) {
     }
     const archiveData = await archiveRes.json();
     const messages = archiveData.messages || [];
-
-    // Highlight active item
-    sidebarRecentsList.querySelectorAll(".sidebar-recent-item").forEach((el) => {
-      el.classList.remove("active");
-    });
-    if (btnEl) btnEl.classList.add("active");
 
     // Display archived messages
     messagesEl.innerHTML = "";
@@ -1355,18 +1357,43 @@ async function saveWizard() {
   const contextReserve = document.getElementById("wizard-context-reserve").value;
   if (contextReserve) config.context_reserve = parseInt(contextReserve);
 
-  // Loading state with animated dots (#44)
+  // Loading state with cycling status messages (#56)
   const saveBtn = document.getElementById("wizard-save");
   const originalText = saveBtn.textContent;
-  const baseText = wizardEditId ? "Saving" : "Creating";
-  const dotFrames = [".", "..", "..."];
-  let dotIndex = 0;
-  saveBtn.textContent = baseText + dotFrames[dotIndex];
+  saveBtn.textContent = wizardEditId ? "Saving..." : "Creating...";
   saveBtn.disabled = true;
-  const dotInterval = setInterval(() => {
-    dotIndex = (dotIndex + 1) % dotFrames.length;
-    saveBtn.textContent = baseText + dotFrames[dotIndex];
-  }, 400);
+
+  const statusMessages = [
+    "Preparing your assistant's workspace...",
+    "Configuring personality and tone...",
+    "Setting up conversation parameters...",
+    "Calibrating response style...",
+    "Initializing knowledge framework...",
+    "Tuning the system prompt...",
+    "Assembling the right defaults...",
+    "Wiring up the context window...",
+    "Loading assistant preferences...",
+    "Polishing the finishing touches...",
+    "Aligning model parameters...",
+    "Building the conversation engine...",
+    "Establishing communication channels...",
+    "Warming up the language model...",
+    "Crafting the perfect introduction...",
+  ];
+  const statusEl = document.getElementById("wizard-status-msg");
+  let lastMsgIndex = -1;
+  function showNextStatus() {
+    let idx;
+    do { idx = Math.floor(Math.random() * statusMessages.length); } while (idx === lastMsgIndex);
+    lastMsgIndex = idx;
+    statusEl.classList.remove("visible");
+    setTimeout(() => {
+      statusEl.textContent = statusMessages[idx];
+      statusEl.classList.add("visible");
+    }, 400);
+  }
+  showNextStatus();
+  const statusInterval = setInterval(showNextStatus, 2000);
 
   try {
     let res;
@@ -1396,7 +1423,9 @@ async function saveWizard() {
   } catch (err) {
     console.error("[wizard] Save failed:", err);
   } finally {
-    clearInterval(dotInterval);
+    clearInterval(statusInterval);
+    statusEl.classList.remove("visible");
+    statusEl.textContent = "";
     saveBtn.textContent = originalText;
     saveBtn.disabled = false;
   }
