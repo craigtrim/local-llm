@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 import ollama as ollama_lib
+
+from local_llm.prompt import wrap_system_prompt
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -97,6 +99,10 @@ def _create_session(model: str, assistant_config: dict | None = None) -> tuple[s
         token_estimate_ratio = assistant_config.get("token_estimate_ratio")
         context_reserve = assistant_config.get("context_reserve")
 
+    # Wrap system prompt with behavioral guardrails (#57)
+    wrap_enabled = assistant_config.get("wrap_system_prompt", True) if assistant_config else True
+    system_prompt = wrap_system_prompt(system_prompt, enable=wrap_enabled)
+
     def summarize_fn(msgs: list[dict]) -> str:
         return client.summarize(msgs, summary_model, SUMMARIZE_PROMPT)
 
@@ -157,6 +163,7 @@ class SaveAssistantRequest(BaseModel):
     context_tokens: int | None = None
     token_estimate_ratio: float | None = None
     context_reserve: int | None = None
+    wrap_system_prompt: bool | None = None
 
 
 @app.post("/api/assistants")
@@ -325,6 +332,29 @@ async def clear_session(session_id: str) -> dict:
             greeting = random.choice(greetings)
     log.info("Session cleared, new session: %s", new_sid)
     return {"session_id": new_sid, "model": info.model, "greeting": greeting}
+
+
+@app.post("/api/sessions/{session_id}/compact")
+async def compact_session(session_id: str) -> dict:
+    """Trigger context compaction without clearing the session (#55)."""
+    log.info("POST /api/sessions/%s/compact", session_id)
+    info = _get_session(session_id)
+    info.history.get_messages()  # trigger compaction if over budget
+    await asyncio.to_thread(_autosave, session_id)
+    stats = info.history.stats()
+    stats["model"] = info.model
+    stats["assistant_id"] = info.assistant_id
+    stats["assistant_name"] = info.assistant_name
+    stats["created_at"] = info.created_at
+    stats["client_ip"] = info.client_ip
+    ratio = info.history.token_estimate_ratio
+    dynamic_chars = int(stats["tokens_remaining"] * ratio)
+    stats["max_input_chars"] = max(500, min(MAX_INPUT_CHARS, dynamic_chars))
+    meta = session_meta.get(session_id, {})
+    stats["source_archive"] = meta.get("source_archive")
+    log.info("Compact result: %s", stats)
+    return stats
+
 
 
 @app.post("/api/sessions/{session_id}/pop")
@@ -697,6 +727,7 @@ async def websocket_chat(ws: WebSocket, session_id: str):
 
             if complete_text:
                 history.add("assistant", complete_text)
+                history.get_messages()  # trigger compaction if over budget (#55)
                 await asyncio.to_thread(_autosave, session_id)
 
             if stopped:

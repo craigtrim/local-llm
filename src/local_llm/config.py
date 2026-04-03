@@ -56,6 +56,7 @@ GREETING_PROMPT = _model.get(
     "bullet points, no other text.",
 )
 GREETING_COUNT = _model.get("greeting_count", 10)
+SYSTEM_PROMPT_WRAPPER = _model.get("system_prompt_wrapper")
 
 # General config (env vars override YAML for test isolation)
 ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR") or _resolve_dir(_general.get("archive_dir", ".user/archives"))

@@ -11,6 +11,8 @@ let activeAssistantEl = null;
 let commandHighlightIndex = 0;
 let maxInputChars = 32000;
 let currentArchiveFilename = null;
+let msgCounter = 0;
+let lastUserText = "";
 
 const messagesEl = document.getElementById("messages");
 const userInput = document.getElementById("user-input");
@@ -382,6 +384,7 @@ function sendMessage() {
   console.log("[send] Sending user message:", text);
   console.log("[send] WebSocket readyState:", ws ? ws.readyState : "null", "(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)");
 
+  lastUserText = text;
   appendMessage("user", text);
   userInput.value = "";
   resetTextarea();
@@ -421,6 +424,12 @@ function finishStreaming(finalContent) {
       // Remove empty assistant bubble (e.g. stopped before any tokens)
       activeAssistantEl.remove();
     }
+  }
+  // Attach action icons to completed assistant message (#20)
+  if (activeAssistantEl && finalContent) {
+    document.querySelectorAll(".message.last-assistant").forEach((m) => m.classList.remove("last-assistant"));
+    buildActionBar(activeAssistantEl);
+    activeAssistantEl.classList.add("last-assistant");
   }
   isStreaming = false;
   setStreamingUI(false);
@@ -579,7 +588,7 @@ async function handleStatus() {
     const overlay = document.getElementById("context-overlay");
     const modal = overlay.querySelector(".context-modal");
     modal.classList.remove("clearing");
-    document.getElementById("context-clear-btn").textContent = "Clear Context";
+    document.getElementById("context-compact-btn").textContent = "Compact";
     document.getElementById("context-close-btn").style.display = "";
     overlay.style.display = "flex";
     updateContextBar();
@@ -629,7 +638,7 @@ async function updateContextBar() {
     }
     const empty = data.qa_count === 0;
     document.getElementById("clear-btn").disabled = empty;
-    document.getElementById("context-clear-btn").disabled = empty;
+    document.getElementById("context-compact-btn").disabled = empty;
     console.log("[contextBar] Updated: pct=%s filled=%d color=%s maxInput=%d", pct, filled, color, maxInputChars);
   } catch (err) {
     console.error("[contextBar] Failed to update:", err);
@@ -642,6 +651,7 @@ function appendMessage(role, content, msgType) {
   console.log("[dom] Appending message, role:", role, "content length:", content.length);
   const el = document.createElement("div");
   el.className = `message ${role}`;
+  el.dataset.msgIdx = msgCounter++;
 
   // Summary messages render as collapsible callouts (#51)
   if (msgType === "summary") {
@@ -975,31 +985,38 @@ document.getElementById("context-overlay").addEventListener("click", (e) => {
   }
 });
 
-document.getElementById("context-clear-btn").addEventListener("click", async () => {
+document.getElementById("context-compact-btn").addEventListener("click", async () => {
   const modal = document.querySelector(".context-modal");
-  const btn = document.getElementById("context-clear-btn");
+  const btn = document.getElementById("context-compact-btn");
   modal.classList.add("clearing");
   document.getElementById("context-close-btn").style.display = "none";
-  btn.textContent = "Clearing...";
+  btn.textContent = "Compacting...";
   btn.disabled = true;
 
   try {
-    const res = await fetch(`/api/sessions/${sessionId}/clear`, { method: "POST" });
+    const res = await fetch(`/api/sessions/${sessionId}/compact`, { method: "POST" });
     const data = await res.json();
-    sessionId = data.session_id;
-    currentArchiveFilename = null;
-    messagesEl.innerHTML = "";
-    headerTitle.textContent = "local-llm";
-    document.title = "local-llm";
-    connectWebSocket();
-    updateContextBar();
-    loadArchives();
+    const pct = Math.min(100, data.pct_used);
+    const filled = Math.min(10, Math.round(pct / 10));
+    const color = pct > 80 ? "red" : pct > 50 ? "amber" : "green";
+    document.querySelectorAll(".context-segment").forEach((seg, i) => {
+      seg.className = "context-segment" + (i < filled ? ` filled ${color}` : "");
+    });
+    document.querySelector(".context-pct").textContent = `${Math.round(pct)}%`;
+    if (data.max_input_chars != null) {
+      maxInputChars = data.max_input_chars;
+      updateInputLimit();
+    }
+    const empty = data.qa_count === 0;
+    document.getElementById("clear-btn").disabled = empty;
+    document.getElementById("context-compact-btn").disabled = empty;
   } catch (err) {
-    console.error("[context-clear] Failed:", err);
+    console.error("[context-compact] Failed:", err);
   }
 
   btn.disabled = false;
-  btn.textContent = "Clear Context";
+  btn.textContent = "Compact";
+  document.getElementById("context-close-btn").style.display = "";
   modal.classList.remove("clearing");
   closeContextModal();
 });

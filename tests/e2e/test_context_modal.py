@@ -40,24 +40,25 @@ def test_modal_backdrop_close(chat_ready):
     page.wait_for_selector("#context-overlay", state="hidden")
 
 
-def test_modal_clear_context(chat_ready):
-    """Clicking Clear Context clears the chat and closes the modal."""
+def test_modal_compact(chat_ready):
+    """Clicking Compact triggers compaction and closes the modal (#55)."""
     page = chat_ready
 
     # Send a message first
     page.fill("#user-input", "hello")
     page.press("#user-input", "Enter")
     page.wait_for_selector(".streaming-cursor", state="detached", timeout=10000)
-    assert page.locator(".message").count() >= 2
+    msg_count = page.locator(".message").count()
+    assert msg_count >= 2
 
-    # Open modal and clear
+    # Open modal and compact
     page.click("#context-bar")
     page.wait_for_selector("#context-overlay", state="visible")
-    page.click("#context-clear-btn")
+    page.click("#context-compact-btn")
 
-    # Modal should close and messages should be gone
+    # Modal should close and messages should still be present
     page.wait_for_selector("#context-overlay", state="hidden", timeout=10000)
-    assert page.locator(".message").count() == 0
+    assert page.locator(".message").count() == msg_count
 
 
 def test_modal_has_info_tooltip(chat_ready):

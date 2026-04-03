@@ -15,7 +15,7 @@ log = logging.getLogger("local_llm.assistants")
 _REQUIRED_FIELDS = {"name", "model", "system_prompt"}
 _OPTIONAL_FIELDS = {
     "description", "avatar_color", "context_tokens",
-    "token_estimate_ratio", "context_reserve",
+    "token_estimate_ratio", "context_reserve", "wrap_system_prompt",
 }
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _UUID_RE = re.compile(r"^[0-9a-f]{32}$")

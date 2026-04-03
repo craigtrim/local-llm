@@ -105,7 +105,7 @@ def test_resume_preserves_current_system_prompt(client, test_archive):
     history = sessions[sid].history
     messages = history.messages
     assert messages[0]["role"] == "system"
-    assert messages[0]["content"] == SYSTEM_PROMPT
+    assert messages[0]["content"].startswith(SYSTEM_PROMPT)
     system_msgs = [m for m in messages if m["role"] == "system"]
     assert len(system_msgs) == 1
 

@@ -54,9 +54,10 @@ def test_click_archive_then_clear_resets(chat_ready, test_archive):
     page.click("#clear-btn")
     page.wait_for_selector(".message.system", timeout=5000)
 
-    # Context should reset
+    # Context should reset to near-zero (system prompt alone uses a small %)
     pct = page.locator(".context-pct").text_content()
-    assert pct == "0%"
+    pct_val = int(pct.replace("%", ""))
+    assert pct_val <= 5, f"Expected near-zero context after clear, got {pct}"
 
     # Only the system "Conversation cleared." message should remain
     user_msgs = page.locator(".message.user")

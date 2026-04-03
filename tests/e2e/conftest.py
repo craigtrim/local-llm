@@ -2,7 +2,7 @@ import socket
 import tempfile
 import threading
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import uvicorn
@@ -10,6 +10,9 @@ import uvicorn
 FAKE_MODELS = ["test-model-13b", "test-model-7b"]  # sorted order (client.list_models sorts)
 FAKE_RESPONSE = "Hello! I am a test assistant ready to help you."
 FAKE_GREETINGS = [f"Greeting {i}!" for i in range(20)]
+
+# Exposed for tests that need to inspect ollama.chat call args (#57)
+mock_ollama_chat: MagicMock | None = None
 
 
 def _find_free_port() -> int:
@@ -78,8 +81,12 @@ def server_url():
     with open(f"{tmp_assistants}/default.json", "w") as f:
         _json.dump(default_assistant, f)
 
+    global mock_ollama_chat  # noqa: PLW0603
+    mock_chat = MagicMock(side_effect=_fake_ollama_chat)
+    mock_ollama_chat = mock_chat
+
     with (
-        patch("ollama.chat", side_effect=_fake_ollama_chat),
+        patch("ollama.chat", mock_chat),
         patch("ollama.list", side_effect=_fake_ollama_list),
         patch("ollama.show", side_effect=_fake_ollama_show),
         patch("local_llm.assistants.ASSISTANTS_DIR", tmp_assistants),
